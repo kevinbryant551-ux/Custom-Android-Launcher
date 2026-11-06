@@ -86,7 +86,8 @@ import com.kevin.arclauncher.data.LauncherLayout
 import com.kevin.arclauncher.data.Placed
 import com.kevin.arclauncher.data.cellKey
 import com.kevin.arclauncher.data.placeItems
-import com.kevin.arclauncher.data.rowsForPage
+import com.kevin.arclauncher.data.IconPack
+import com.kevin.arclauncher.data.rowsFor
 import com.kevin.arclauncher.widgets.LongPressWidgetView
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -101,6 +102,12 @@ private val TextShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 2f), 
 /** What a tile needs to offer "Move to previous / next page". */
 private class PageMover(val page: Int, val pageCount: Int, val move: (HomeItem, Int) -> Unit)
 
+/** Where an app dragged out of the drawer can land, in root coordinates. */
+class HomeDropTargets {
+    val pageGrids = mutableStateMapOf<Int, Rect>()
+    var dock by mutableStateOf<Rect?>(null)
+}
+
 /** Callbacks a movable tile reports its drag through, in px. */
 private class DragCallbacks(val start: () -> Unit, val move: (Offset) -> Unit, val end: () -> Unit)
 
@@ -111,10 +118,12 @@ fun HomeScreen(
     viewModel: LauncherViewModel,
     actions: LauncherActions,
     pagerState: PagerState,
+    dropTargets: HomeDropTargets,
     onOpenDrawer: (focusSearch: Boolean) -> Unit,
     onOpenFolder: (String) -> Unit,
     onAddWidget: (page: Int) -> Unit,
 ) {
+    var iconPackDialog by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     var backgroundMenuAt by remember { mutableStateOf<Offset?>(null) }
     var confirmRemovePage by remember { mutableStateOf<Int?>(null) }
@@ -138,9 +147,13 @@ fun HomeScreen(
             scrollToPage = null
         }
     }
-    fun addPageAfter(page: Int) {
+    fun addPageRight(page: Int) {
         viewModel.addPage(page)
         scrollToPage = page + 1
+    }
+    fun addPageLeft(page: Int) {
+        // The new page takes this index, so the pager is already showing it.
+        viewModel.insertPage(page)
     }
 
     Box(
@@ -178,6 +191,7 @@ fun HomeScreen(
                     actions = actions,
                     mover = PageMover(index, pageCount) { item, to -> viewModel.moveToPage(item, index, to) },
                     itemBounds = itemBounds,
+                    onGridBounds = { dropTargets.pageGrids[index] = it },
                     onDragActive = { dragActive = it },
                     onOpenDrawer = onOpenDrawer,
                     onOpenFolder = onOpenFolder,
@@ -185,7 +199,11 @@ fun HomeScreen(
             }
             if (pageCount > 1) PageIndicator(pageCount, pagerState.currentPage)
             DrawerHandle(onClick = { onOpenDrawer(false) })
-            Dock(dockApps, viewModel, actions)
+            Dock(
+                dockApps, layout, viewModel, actions,
+                onBounds = { dropTargets.dock = it; itemBounds["ui:dock"] = it },
+                onDragActive = { dragActive = it },
+            )
         }
 
         backgroundMenuAt?.let { at ->
@@ -194,7 +212,11 @@ fun HomeScreen(
             Box(Modifier.offset { IntOffset(at.x.toInt(), at.y.toInt()) }.size(1.dp)) {
                 DropdownMenu(expanded = true, onDismissRequest = ::close) {
                     DropdownMenuItem(text = { Text("Add widget") }, onClick = { close(); onAddWidget(page) })
-                    DropdownMenuItem(text = { Text("Add page") }, onClick = { close(); addPageAfter(page) })
+                    DropdownMenuItem(text = { Text("Add page to the left") }, onClick = { close(); addPageLeft(page) })
+                    DropdownMenuItem(text = { Text("Add page to the right") }, onClick = { close(); addPageRight(page) })
+                    if (page != layout.homePage) {
+                        DropdownMenuItem(text = { Text("Make this the home page") }, onClick = { close(); viewModel.setHomePage(page) })
+                    }
                     if (pageCount > 1) {
                         DropdownMenuItem(text = { Text("Remove this page") }, onClick = {
                             close()
@@ -202,14 +224,23 @@ fun HomeScreen(
                         })
                     }
                     DropdownMenuItem(
+                        text = { Text(if (layout.showClock) "Hide clock" else "Show clock") },
+                        onClick = { close(); viewModel.setClockVisible(!layout.showClock) },
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (layout.showSearchBar) "Hide search bar" else "Show search bar") },
                         onClick = { close(); viewModel.setSearchBarVisible(!layout.showSearchBar) },
                     )
+                    DropdownMenuItem(text = { Text("Icon pack") }, onClick = { close(); iconPackDialog = true })
                     DropdownMenuItem(text = { Text("Wallpaper") }, onClick = { close(); actions.openWallpaperPicker() })
                     DropdownMenuItem(text = { Text("All apps") }, onClick = { close(); onOpenDrawer(false) })
                 }
             }
         }
+    }
+
+    if (iconPackDialog) {
+        IconPackDialog(current = layout.iconPack, onDismiss = { iconPackDialog = false }, onPick = { iconPackDialog = false; viewModel.setIconPack(it) })
     }
 
     confirmRemovePage?.let { page ->
@@ -236,11 +267,12 @@ private fun HomePageContent(
     actions: LauncherActions,
     mover: PageMover,
     itemBounds: SnapshotStateMap<String, Rect>,
+    onGridBounds: (Rect) -> Unit,
     onDragActive: (Boolean) -> Unit,
     onOpenDrawer: (Boolean) -> Unit,
     onOpenFolder: (String) -> Unit,
 ) {
-    val rows = rowsForPage(index)
+    val rows = layout.rowsFor(index)
     // Hide items whose app is gone (uninstalled, or a paused work profile) without freeing their cell.
     val placed = remember(page, layout.folders, appsByKey) {
         placeItems(page.items, page.cells, HOME_COLUMNS, rows).first.filter { p ->
@@ -254,14 +286,23 @@ private fun HomePageContent(
     var drag by remember { mutableStateOf<Drag?>(null) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-        if (index == 0) {
-            ClockGlance(onClick = actions::openClock)
+        if (index == layout.homePage) {
+            // Registered as items so a long-press on them isn't also taken as a long-press on the page.
+            if (layout.showClock) {
+                Box(Modifier.onGloballyPositioned { itemBounds["ui:clock"] = it.boundsInRoot() }) {
+                    ClockGlance(onClick = actions::openClock, onRemove = { viewModel.setClockVisible(false) })
+                }
+                DisposableEffect(Unit) { onDispose { itemBounds.remove("ui:clock") } }
+            }
             if (layout.showSearchBar) {
-                SearchPill(onClick = { onOpenDrawer(true) }, onRemove = { viewModel.setSearchBarVisible(false) })
+                Box(Modifier.onGloballyPositioned { itemBounds["ui:search"] = it.boundsInRoot() }) {
+                    SearchPill(onClick = { onOpenDrawer(true) }, onRemove = { viewModel.setSearchBarVisible(false) })
+                }
+                DisposableEffect(Unit) { onDispose { itemBounds.remove("ui:search") } }
             }
             Spacer(Modifier.height(12.dp))
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { onGridBounds(it.boundsInRoot()) }) {
             val cellW = maxWidth / HOME_COLUMNS
             val cellH = maxHeight / rows
             val density = LocalDensity.current
@@ -300,7 +341,7 @@ private fun HomePageContent(
 
             if (placed.isEmpty()) {
                 Text(
-                    if (index == 0) "Swipe up for all apps.\nLong-press apps there to add them here."
+                    if (index == layout.homePage) "Swipe up for all apps.\nLong-press and drag apps from there to here."
                     else "Empty page.\nLong-press here to add a widget.",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.75f), shadow = TextShadow),
@@ -364,6 +405,36 @@ private fun HomePageContent(
 }
 
 @Composable
+fun IconMenuItems(key: String, viewModel: LauncherViewModel, actions: LauncherActions, close: () -> Unit) {
+    DropdownMenuItem(text = { Text("Change icon") }, onClick = { close(); actions.pickIcon(key) })
+    if (key in viewModel.layout.value.customIcons) {
+        DropdownMenuItem(text = { Text("Reset icon") }, onClick = { close(); viewModel.resetIcon(key) })
+    }
+}
+
+@Composable
+private fun IconPackDialog(current: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+    val context = LocalContext.current
+    val packs = remember { IconPack.installed(context) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Icon pack") },
+        text = {
+            Column {
+                if (packs.isEmpty()) {
+                    Text("No icon packs installed. Get one from the Play Store (search \"icon pack\"), then pick it here.")
+                }
+                TextButton(onClick = { onPick(null) }) { Text(if (current == null) "✓ App icons (default)" else "App icons (default)") }
+                packs.forEach { (pkg, label) ->
+                    TextButton(onClick = { onPick(pkg) }) { Text(if (pkg == current) "✓ $label" else label) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
 private fun MoveMenuItems(item: HomeItem, mover: PageMover, close: () -> Unit) {
     if (mover.page > 0) {
         DropdownMenuItem(text = { Text("Move to previous page") }, onClick = { close(); mover.move(item, mover.page - 1) })
@@ -393,7 +464,7 @@ private fun HomeAppTile(
             label = app.label,
             onTap = { actions.launch(app) },
             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
-            onDragStart = { menu = false; drag.start() },
+            onDragStart = { _ -> menu = false; drag.start() },
             onDrag = drag.move,
             onDragEnd = drag.end,
         ),
@@ -405,6 +476,7 @@ private fun HomeAppTile(
                     if (!viewModel.moveToDock(item)) actions.toast("Dock is full")
                 })
                 MoveMenuItems(item, mover) { menu = false }
+                IconMenuItems(app.key, viewModel, actions) { menu = false }
                 DropdownMenuItem(text = { Text("App info") }, onClick = { menu = false; actions.appInfo(listOf(app)) })
                 DropdownMenuItem(text = { Text("Uninstall") }, onClick = { menu = false; actions.uninstall(listOf(app)) })
             }
@@ -433,7 +505,7 @@ private fun HomeFolderTile(
             label = name,
             onTap = onOpen,
             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
-            onDragStart = { menu = false; drag.start() },
+            onDragStart = { _ -> menu = false; drag.start() },
             onDrag = drag.move,
             onDragEnd = drag.end,
         ),
@@ -559,8 +631,11 @@ private fun PageIndicator(count: Int, current: Int) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ClockGlance(onClick: () -> Unit) {
+private fun ClockGlance(onClick: () -> Unit, onRemove: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var menu by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -578,11 +653,20 @@ private fun ClockGlance(onClick: () -> Unit) {
     val time = dateTime.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm"))
     val date = dateTime.format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))
 
-    Column(
-        Modifier.padding(top = 24.dp, start = 8.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(8.dp),
-    ) {
-        Text(time, style = MaterialTheme.typography.displayLarge.copy(color = Color.White, fontWeight = FontWeight.Light, shadow = TextShadow))
-        Text(date, style = MaterialTheme.typography.titleMedium.copy(color = Color.White, shadow = TextShadow))
+    Box {
+        Column(
+            Modifier
+                .padding(top = 24.dp, start = 8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(onClick = onClick, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true })
+                .padding(8.dp),
+        ) {
+            Text(time, style = MaterialTheme.typography.displayLarge.copy(color = Color.White, fontWeight = FontWeight.Light, shadow = TextShadow))
+            Text(date, style = MaterialTheme.typography.titleMedium.copy(color = Color.White, shadow = TextShadow))
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Remove clock") }, onClick = { menu = false; onRemove() })
+        }
     }
 }
 
@@ -625,38 +709,97 @@ private fun DrawerHandle(onClick: () -> Unit) {
     }
 }
 
+/**
+ * The dock. Long-press an icon for its menu; long-press and drag sideways to reorder.
+ * While dragging, the icon stays dimmed in place and a copy follows the finger.
+ */
 @Composable
-private fun Dock(apps: List<AppEntry>, viewModel: LauncherViewModel, actions: LauncherActions) {
+private fun Dock(
+    apps: List<AppEntry>,
+    layout: LauncherLayout,
+    viewModel: LauncherViewModel,
+    actions: LauncherActions,
+    onBounds: (Rect) -> Unit,
+    onDragActive: (Boolean) -> Unit,
+) {
     val haptics = LocalHapticFeedback.current
-    Row(
+    var dragKey by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    var slotWidthPx by remember { mutableStateOf(1f) }
+    val density = LocalDensity.current
+
+    fun targetIndex(): Int {
+        val from = apps.indexOfFirst { it.key == dragKey }
+        return (from + (dragOffset / slotWidthPx).roundToInt()).coerceIn(0, apps.lastIndex)
+    }
+
+    Box(
         Modifier
             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)
             .fillMaxWidth()
+            .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .clip(RoundedCornerShape(28.dp))
             .background(Color.White.copy(alpha = 0.16f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (apps.isEmpty()) {
-            Text("Dock: add apps from the drawer", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(20.dp))
+        Row(
+            Modifier.fillMaxWidth().onGloballyPositioned { slotWidthPx = it.size.width.toFloat() / apps.size.coerceAtLeast(1) },
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (apps.isEmpty()) {
+                Text("Dock: drag apps here from the drawer", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(20.dp))
+            }
+            apps.forEach { app ->
+                var menu by remember { mutableStateOf(false) }
+                AppTile(
+                    label = app.label,
+                    showLabel = false,
+                    onClick = { actions.launch(app) },
+                    onLongClick = { menu = true },
+                    icon = { AppIconImage(app) },
+                    modifier = Modifier.weight(1f).alpha(if (dragKey == app.key) 0.25f else 1f),
+                    gestures = Modifier.homeItemGestures(
+                        label = app.label,
+                        onTap = { actions.launch(app) },
+                        onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
+                        onDragStart = { menu = false; dragKey = app.key; dragOffset = 0f; onDragActive(true) },
+                        onDrag = { dragOffset += it.x },
+                        onDragEnd = {
+                            viewModel.moveInDock(app.key, targetIndex())
+                            dragKey = null
+                            onDragActive(false)
+                        },
+                    ),
+                    menu = {
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("Remove from dock") }, onClick = { menu = false; viewModel.removeFromDock(app.key) })
+                            IconMenuItems(app.key, viewModel, actions) { menu = false }
+                            DropdownMenuItem(text = { Text("App info") }, onClick = { menu = false; actions.appInfo(listOf(app)) })
+                        }
+                    },
+                )
+            }
         }
-        apps.forEach { app ->
-            var menu by remember { mutableStateOf(false) }
-            AppTile(
-                label = app.label,
-                showLabel = false,
-                onClick = { actions.launch(app) },
-                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
-                icon = { AppIconImage(app) },
-                modifier = Modifier.weight(1f),
-                menu = {
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Remove from dock") }, onClick = { menu = false; viewModel.removeFromDock(app.key) })
-                        DropdownMenuItem(text = { Text("App info") }, onClick = { menu = false; actions.appInfo(listOf(app)) })
-                    }
-                },
+        dragKey?.let { key ->
+            val app = apps.firstOrNull { it.key == key } ?: return@let
+            val from = apps.indexOf(app)
+            val to = targetIndex()
+            val slotDp = with(density) { slotWidthPx.toDp() }
+            // Where it will land.
+            Box(
+                Modifier.offset(x = slotDp * to).width(slotDp).height(IconSize + 16.dp).padding(2.dp)
+                    .border(2.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(18.dp)),
             )
+            // The icon under the finger.
+            Box(
+                Modifier
+                    .offset { IntOffset((slotWidthPx * from + dragOffset).roundToInt(), 0) }
+                    .width(slotDp)
+                    .height(IconSize + 16.dp)
+                    .graphicsLayer { scaleX = 1.1f; scaleY = 1.1f },
+                contentAlignment = Alignment.Center,
+            ) { AppIconImage(app) }
         }
     }
 }

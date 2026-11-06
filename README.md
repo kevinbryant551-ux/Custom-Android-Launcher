@@ -8,10 +8,13 @@ Microsoft Launcher, with its own look.
 
 - **Home screen** over your wallpaper: clock and date glance (tap opens alarms), a search pill, a 4-column grid of apps, folders and widgets.
 - **Movable icons / custom layouts**: each home page is a fixed grid (4 columns; 5 rows on page 1 under the clock, 6 on the others). Long-press an app, folder or widget and drag it to any free cell; an outline shows where it will land and gaps are kept. Drop an app on another app to make a folder there, or onto a folder to add it. Lifting without moving leaves the long-press menu open instead.
-- **Multiple home pages**: swipe sideways; dots show where you are. Long-press empty space → **Add page** (empty pages are kept) or **Remove this page**. Apps, folders and widgets have **Move to previous / next page**. Home on a clean screen returns to page 1.
+- **Multiple home pages**: swipe sideways; dots show where you are. Long-press empty space → **Add page to the left / right** (empty pages are kept), **Make this the home page**, or **Remove this page**. Apps, folders and widgets have **Move to previous / next page**. Home on a clean screen returns to page 1.
 - **Widgets**: long-press empty space → **Add widget** opens a picker grouped by app with previews. Android asks once to allow widget access, and widgets with a setup screen open it. Long-press a widget to **Resize** (width 1–4, height 1–6 cells), move it between pages, or **Remove** it.
-- **Removable search bar**: long-press it → Remove search bar, or toggle it from the home long-press menu.
-- **Dock** of up to 5 apps (seeded on first run with your default Phone, Messages, Browser and Camera).
+- **Removable clock and search bar**: long-press either → Remove, or toggle them from the home long-press menu. Hiding the clock gives the home page a sixth row.
+- **Dock** of up to 5 apps (seeded on first run with your default Phone, Messages, Browser and Camera). Long-press and drag an icon sideways to reorder it.
+- **Drag from the drawer**: long-press an app in the drawer and, without lifting, move it. The drawer gets out of the way and you drop the app on any home cell, onto another app to make a folder, onto a folder, or onto the dock. Hold it at the screen edge to flip pages.
+- **Custom icons**: long-press an app (home, dock, or one selected app in the drawer) → **Change icon** to use any picture (Android photo picker, no storage permission), or **Reset icon**. Long-press empty home space → **Icon pack** to use any installed pack in the standard ADW/Nova `appfilter.xml` format.
+- **Default launcher prompt**: each time the app opens while it isn't your Home app, it asks once; **Yes** opens Android's Default home app screen.
 - **App drawer**: swipe up (or tap the ^ handle). Alphabetical with **sticky letter headers** (`#` for anything that doesn't start with A–Z), an **A–Z fast-scroll strip** you can drag, and **search** (substring or initials, e.g. "gm" finds Google Maps; the keyboard's Go key opens the best match).
 - **Bulk selection**: long-press any app in the drawer to enter selection mode, tap more apps to check them, then use the **⋮ menu at the top right**: Group into folder, Add to home screen, Add to dock, App info, Uninstall, Hide / Unhide, Select all, Cancel.
 - **Folders** on the home screen: tap to open, tap the name to rename, long-press an app inside for Remove from folder / App info / Uninstall, or Ungroup the whole folder.
@@ -59,4 +62,4 @@ To remove it: switch the Home app back to Pixel Launcher, then `adb uninstall co
 
 ## Not done yet
 
-Dragging across pages (use Move to previous / next page for now), dragging into the dock, and icon packs.
+Dragging home items across pages (drawer drags can flip pages; home items use Move to previous / next page) and dragging home items into the dock.

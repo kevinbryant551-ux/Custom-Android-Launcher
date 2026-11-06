@@ -11,6 +11,13 @@ data class LauncherLayout(
     val folders: Map<String, Folder> = emptyMap(),
     val hidden: Set<String> = emptySet(),
     val showSearchBar: Boolean = true,
+    val showClock: Boolean = true,
+    /** The page Home returns to; it carries the clock and search bar. Pages can sit left or right of it. */
+    val homePage: Int = 0,
+    /** App key -> file name (in the app's files/icons dir) of a picture the user chose as its icon. */
+    val customIcons: Map<String, String> = emptyMap(),
+    /** Package of the chosen icon pack, or null for the apps' own icons. */
+    val iconPack: String? = null,
     val initialized: Boolean = false,
     /** Single-page home from v0.1; moved into [pages] by [migrated]. */
     @SerialName("home") val legacyHome: List<HomeItem> = emptyList(),
@@ -55,11 +62,11 @@ val HomeItem.cellKey: String
 
 const val DOCK_CAPACITY = 5
 const val HOME_COLUMNS = 4
-const val FIRST_PAGE_ROWS = 5 // page 1 also holds the clock and search bar
+const val FIRST_PAGE_ROWS = 5 // the home page loses a row to the clock
 const val PAGE_ROWS = 6
 const val MAX_WIDGET_SPAN_Y = PAGE_ROWS
 
-fun rowsForPage(index: Int) = if (index == 0) FIRST_PAGE_ROWS else PAGE_ROWS
+fun LauncherLayout.rowsFor(page: Int) = if (page == homePage && showClock) FIRST_PAGE_ROWS else PAGE_ROWS
 
 fun LauncherLayout.migrated(): LauncherLayout {
     if (legacyHome.isEmpty()) return if (pages.isEmpty()) copy(pages = listOf(HomePage())) else this
@@ -162,6 +169,23 @@ fun LauncherLayout.hide(keys: Collection<String>): LauncherLayout = copy(hidden 
 
 fun LauncherLayout.unhide(keys: Collection<String>): LauncherLayout = copy(hidden = hidden - keys.toSet())
 
+/** Puts an app from the drawer on [page] at ([x], [y]); if that cell is taken it goes to the first free one. */
+fun LauncherLayout.placeApp(key: String, page: Int, x: Int, y: Int): LauncherLayout {
+    val app = HomeItem.App(key)
+    val p = pageIndex(page)
+    // An app appears on the home screen once: take it off wherever it was.
+    val cleared = mapItems { items -> items - app }
+    val withApp = cleared.copy(pages = cleared.pages.mapIndexed { i, pg -> if (i == p) pg.copy(items = pg.items + app) else pg })
+    return withApp.moveItem(p, app, x, y) ?: withApp
+}
+
+/** Moves a dock app to [index], shifting the others. */
+fun LauncherLayout.moveInDock(key: String, index: Int): LauncherLayout {
+    if (key !in dock) return this
+    val rest = dock - key
+    return copy(dock = rest.toMutableList().apply { add(index.coerceIn(0, rest.size), key) })
+}
+
 /** Drops every reference to an uninstalled package (in one user profile). */
 fun LauncherLayout.removePackage(packageName: String, userSerial: Long): LauncherLayout {
     fun gone(key: String) = key.startsWith("$packageName/") && key.endsWith("#$userSerial")
@@ -171,18 +195,34 @@ fun LauncherLayout.removePackage(packageName: String, userSerial: Long): Launche
         dock = dock.filterNot(::gone),
         folders = newFolders - emptied,
         hidden = hidden.filterNot(::gone).toSet(),
+        customIcons = customIcons.filterKeys { !gone(it) },
     ).mapItems { items ->
         items.filterNot { (it is HomeItem.App && gone(it.key)) || (it is HomeItem.FolderRef && it.id in emptied) }
     }
 }
 
+/** Inserts an empty page at [index] (0 = far left), keeping the home page the same page. */
+fun LauncherLayout.insertPage(index: Int): LauncherLayout {
+    val at = index.coerceIn(0, pages.size)
+    return copy(
+        pages = pages.toMutableList().apply { add(at, HomePage()) },
+        homePage = if (at <= homePage) homePage + 1 else homePage,
+    )
+}
+
 /** Inserts an empty page right after [after]. */
-fun LauncherLayout.addPage(after: Int): LauncherLayout =
-    copy(pages = pages.toMutableList().apply { add((after + 1).coerceIn(0, size), HomePage()) })
+fun LauncherLayout.addPage(after: Int): LauncherLayout = insertPage(after + 1)
 
 /** Removes a page (never the last one left). */
-fun LauncherLayout.removePage(index: Int): LauncherLayout =
-    if (pages.size <= 1 || index !in pages.indices) this else copy(pages = pages.filterIndexed { i, _ -> i != index })
+fun LauncherLayout.removePage(index: Int): LauncherLayout {
+    if (pages.size <= 1 || index !in pages.indices) return this
+    val home = when {
+        index < homePage -> homePage - 1
+        index == homePage -> homePage.coerceAtMost(pages.size - 2)
+        else -> homePage
+    }
+    return copy(pages = pages.filterIndexed { i, _ -> i != index }, homePage = home)
+}
 
 fun LauncherLayout.addWidget(page: Int, widget: HomeItem.Widget): LauncherLayout {
     val p = pageIndex(page)
@@ -268,7 +308,7 @@ fun LauncherLayout.normalized(): LauncherLayout {
     var i = 0
     while (i < pages.size || carry.isNotEmpty()) {
         val page = pages.getOrElse(i) { HomePage() }
-        val (placed, overflow) = placeItems(page.items + carry, page.cells, HOME_COLUMNS, rowsForPage(i))
+        val (placed, overflow) = placeItems(page.items + carry, page.cells, HOME_COLUMNS, rowsFor(i))
         val order = placed.map { it.item }
         out += HomePage(
             items = (page.items + carry).filter { it in order },
@@ -277,13 +317,13 @@ fun LauncherLayout.normalized(): LauncherLayout {
         carry = overflow
         i++
     }
-    return copy(pages = out)
+    return copy(pages = out, homePage = homePage.coerceIn(0, out.lastIndex))
 }
 
 /** Moves an item to cell ([x], [y]) on [page]. Returns null if it doesn't fit there. */
 fun LauncherLayout.moveItem(page: Int, item: HomeItem, x: Int, y: Int): LauncherLayout? {
     val pg = pages.getOrNull(page) ?: return null
-    val rows = rowsForPage(page)
+    val rows = rowsFor(page)
     val (w, h) = item.span(HOME_COLUMNS, rows)
     if (x < 0 || y < 0 || x + w > HOME_COLUMNS || y + h > rows) return null
     val others = placeItems(pg.items, pg.cells, HOME_COLUMNS, rows).first.filter { it.item != item }

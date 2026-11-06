@@ -15,4 +15,10 @@ interface LauncherActions {
 
     /** Binds (asking permission if needed), configures, then places a widget on home [page]. */
     fun addWidget(provider: AppWidgetProviderInfo, page: Int)
+
+    /** Opens the photo picker and uses the chosen image as the icon for app [key]. */
+    fun pickIcon(key: String)
+
+    fun isDefaultHome(): Boolean
+    fun openDefaultHomeSettings()
 }

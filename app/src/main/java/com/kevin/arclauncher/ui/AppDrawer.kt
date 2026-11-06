@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -71,7 +72,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +120,10 @@ fun AppDrawer(
     focusSearch: Boolean,
     currentPage: Int,
     onClose: () -> Unit,
+    /** Long-press then move on an app: drag it out to the home screen. Position is in root coordinates. */
+    onDragOut: (AppEntry, Offset) -> Unit,
+    onDragOutMove: (Offset) -> Unit,
+    onDragOutEnd: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var showHidden by rememberSaveable { mutableStateOf(false) }
@@ -187,6 +195,7 @@ fun AppDrawer(
                     onHide = { viewModel.hide(selected); actions.toast("Hidden. Show them again from the ⋮ menu."); finish() },
                     onUnhide = { viewModel.unhide(selected); finish() },
                     onSelectAll = { selected = ordered.map { it.key }.toSet() },
+                    onChangeIcon = if (selectedApps.size == 1) ({ actions.pickIcon(selectedApps.single().key); finish() }) else null,
                 )
             } else {
                 SearchBar(
@@ -222,17 +231,32 @@ fun AppDrawer(
                                 Row(Modifier.fillMaxWidth()) {
                                     row.apps.forEach { app ->
                                         val checked = app.key in selected
+                                        var tileInRoot by remember { mutableStateOf(Offset.Zero) }
+                                        val tap = { if (selecting) toggle(app.key) else actions.launch(app) }
                                         AppTile(
                                             label = app.label,
                                             dimmed = app.key in layout.hidden,
-                                            onClick = { if (selecting) toggle(app.key) else actions.launch(app) },
-                                            onLongClick = {
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                toggle(app.key)
-                                            },
+                                            onClick = tap,
+                                            onLongClick = { toggle(app.key) },
                                             icon = { AppIconImage(app) },
                                             badge = { if (selecting) SelectionCheck(checked) },
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(1f).onGloballyPositioned { tileInRoot = it.positionInRoot() },
+                                            // Long-press selects; keep holding and move to drag it out to the home screen instead.
+                                            gestures = Modifier.homeItemGestures(
+                                                label = app.label,
+                                                onTap = tap,
+                                                onLongPress = {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    toggle(app.key)
+                                                },
+                                                dragEnabled = { !selecting },
+                                                onDragStart = { at ->
+                                                    selected = selected - app.key
+                                                    onDragOut(app, tileInRoot + at)
+                                                },
+                                                onDrag = onDragOutMove,
+                                                onDragEnd = onDragOutEnd,
+                                            ),
                                         )
                                     }
                                     repeat(DRAWER_COLUMNS - row.apps.size) { Spacer(Modifier.weight(1f)) }
@@ -339,7 +363,7 @@ private fun SearchBar(
                     onClick = { menu = false; onToggleHidden() },
                 )
                 DropdownMenuItem(text = { Text("Wallpaper") }, leadingIcon = { Icon(Icons.Default.Home, null) }, onClick = { menu = false; onWallpaper() })
-                DropdownMenuItem(text = { Text("Tip: long-press an app to select several") }, onClick = { menu = false }, enabled = false)
+                DropdownMenuItem(text = { Text("Tip: long-press to select; hold and move to place on home") }, onClick = { menu = false }, enabled = false)
             }
         }
     }
@@ -358,6 +382,7 @@ private fun SelectionBar(
     onHide: () -> Unit,
     onUnhide: () -> Unit,
     onSelectAll: () -> Unit,
+    onChangeIcon: (() -> Unit)?,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -373,6 +398,7 @@ private fun SelectionBar(
                 Entry("Add to home screen", Icons.Default.Home, onAddHome)
                 Entry("Add to dock", Icons.Default.KeyboardArrowDown, onAddDock)
                 Entry("App info", Icons.Default.Info, onInfo)
+                onChangeIcon?.let { Entry("Change icon", Icons.Default.Edit, it) }
                 Entry("Uninstall", Icons.Default.Delete, onUninstall)
                 if (allHidden) Entry("Unhide", Icons.Default.Lock, onUnhide) else Entry("Hide", Icons.Default.Lock, onHide)
                 HorizontalDivider()

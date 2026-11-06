@@ -156,5 +156,44 @@ class LauncherLogicTest {
         assertEquals(Cell(3, 2), out.pages[0].cells["folder:f"])
         assertEquals(listOf("b", "a"), out.folders["f"]!!.apps)
     }
+
+    @Test
+    fun pagesLeftOfHomeKeepHomeAndRemovalAdjustsIt() {
+        var l = LauncherLayout()
+        l = l.insertPage(0) // new page to the left of home
+        assertEquals(2, l.pages.size)
+        assertEquals(1, l.homePage)
+        l = l.addPage(1) // to the right of home
+        assertEquals(1, l.homePage)
+        l = l.removePage(0)
+        assertEquals(0, l.homePage)
+        assertEquals(FIRST_PAGE_ROWS, l.rowsFor(0))
+        assertEquals(PAGE_ROWS, l.copy(showClock = false).rowsFor(0))
+    }
+
+    @Test
+    fun dockReorders() {
+        val l = LauncherLayout(dock = listOf("a", "b", "c", "d"))
+        assertEquals(listOf("b", "c", "a", "d"), l.moveInDock("a", 2).dock)
+        assertEquals(listOf("d", "a", "b", "c"), l.moveInDock("d", 0).dock)
+    }
+
+    @Test
+    fun appFromDrawerLandsInChosenCellAndMovesIfAlreadyOnHome() {
+        val a = HomeItem.App("a")
+        var l = LauncherLayout(pages = listOf(HomePage(listOf(a)), HomePage())).normalized()
+        l = l.placeApp("b", 0, 3, 4).normalized()
+        assertEquals(Cell(3, 4), l.pages[0].cells["app:b"])
+        l = l.placeApp("a", 1, 2, 2).normalized()
+        assertFalse(a in l.pages[0].items)
+        assertEquals(Cell(2, 2), l.pages[1].cells[a.cellKey])
+    }
+
+    @Test
+    fun iconPackComponentsParse() {
+        assertEquals("com.foo/com.foo.Main", IconPack.parseComponent("ComponentInfo{com.foo/com.foo.Main}"))
+        assertEquals("com.foo/com.foo.Main", IconPack.parseComponent("ComponentInfo{com.foo/.Main}"))
+        assertEquals(null, IconPack.parseComponent(":LAUNCHER_ACTION_APP_DRAWER"))
+    }
 }
 

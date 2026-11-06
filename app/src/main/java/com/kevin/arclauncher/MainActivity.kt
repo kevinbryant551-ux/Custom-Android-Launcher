@@ -1,12 +1,14 @@
 package com.kevin.arclauncher
 
 import android.annotation.SuppressLint
+import android.app.role.RoleManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -18,6 +20,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import com.kevin.arclauncher.data.AppEntry
@@ -36,6 +39,14 @@ class MainActivity : ComponentActivity(), LauncherActions {
     private var pendingWidget: Triple<Int, AppWidgetProviderInfo, Int>? = null
     private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) configureOrPlaceWidget() else cancelPendingWidget()
+    }
+
+    private var iconTargetKey: String? = null
+    // The Android photo picker needs no storage permission.
+    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val key = iconTargetKey
+        iconTargetKey = null
+        if (uri != null && key != null) viewModel.setCustomIcon(key, uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -201,6 +212,26 @@ class MainActivity : ComponentActivity(), LauncherActions {
     private fun cancelPendingWidget() {
         pendingWidget?.let { viewModel.widgetHost.deleteAppWidgetId(it.first) }
         pendingWidget = null
+    }
+
+    override fun pickIcon(key: String) {
+        iconTargetKey = key
+        pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    override fun isDefaultHome(): Boolean {
+        val role = getSystemService(RoleManager::class.java)
+        if (role != null && role.isRoleAvailable(RoleManager.ROLE_HOME)) return role.isRoleHeld(RoleManager.ROLE_HOME)
+        val home = packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)
+        return home?.activityInfo?.packageName == packageName
+    }
+
+    override fun openDefaultHomeSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
     }
 
     private companion object {

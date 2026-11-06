@@ -61,7 +61,7 @@ private val LabelShadow = Shadow(Color.Black.copy(alpha = 0.7f), Offset(0f, 1.5f
 @Composable
 fun AppIconImage(app: AppEntry, size: Dp = IconSize, modifier: Modifier = Modifier) {
     val loader = LocalIconLoader.current
-    val bitmap by produceState(loader.cached(app.key), app.key) { value = loader.load(app) }
+    val bitmap by produceState(loader.cached(app.key), app.key, loader.version) { value = loader.load(app) }
     Box(modifier.size(size)) {
         bitmap?.let { Image(it, contentDescription = null, modifier = Modifier.size(size)) }
     }
@@ -193,9 +193,11 @@ fun Modifier.homeItemGestures(
     label: String,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
-    onDragStart: () -> Unit,
+    /** Gets the finger's position within this element when the drag begins. */
+    onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
+    dragEnabled: () -> Boolean = { true },
 ): Modifier = semantics {
     role = Role.Button
     onClick(label) { onTap(); true }
@@ -218,6 +220,7 @@ fun Modifier.homeItemGestures(
             if (released && !cancelled) onTap()
             return@awaitEachGesture
         }
+        val canDrag = dragEnabled()
         onLongPress()
         var total = Offset.Zero
         var dragging = false
@@ -227,9 +230,9 @@ fun Modifier.homeItemGestures(
             val delta = change.positionChange()
             change.consume()
             total += delta
-            if (!dragging && total.getDistance() > slop) {
+            if (canDrag && !dragging && total.getDistance() > slop) {
                 dragging = true
-                onDragStart()
+                onDragStart(change.position)
                 onDrag(total)
             } else if (dragging) {
                 onDrag(delta)

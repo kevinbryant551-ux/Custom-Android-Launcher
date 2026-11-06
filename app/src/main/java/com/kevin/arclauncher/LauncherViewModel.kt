@@ -7,6 +7,8 @@ import android.os.Build
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +25,9 @@ import com.kevin.arclauncher.data.LauncherLayout
 import com.kevin.arclauncher.data.LayoutStore
 import com.kevin.arclauncher.data.MAX_WIDGET_SPAN_Y
 import com.kevin.arclauncher.data.addPage
+import com.kevin.arclauncher.data.insertPage
+import com.kevin.arclauncher.data.moveInDock
+import com.kevin.arclauncher.data.placeApp
 import com.kevin.arclauncher.data.addWidget
 import com.kevin.arclauncher.data.moveToPage
 import com.kevin.arclauncher.data.removePage
@@ -53,6 +58,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 import kotlin.math.ceil
 
@@ -62,7 +68,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val store = LayoutStore(application)
 
     val iconLoader = application.resources.displayMetrics.let {
-        IconLoader(it.densityDpi, (64 * it.density).toInt())
+        IconLoader(application, it.densityDpi, (64 * it.density).toInt())
     }
 
     val widgetHost = LauncherWidgetHost(application)
@@ -104,6 +110,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     init {
         launcherApps.registerCallback(callback, Handler(Looper.getMainLooper()))
         reload()
+        // Keep the icon loader in step with custom icons and the chosen icon pack.
+        viewModelScope.launch {
+            _layout.collect { iconLoader.configure(it.customIcons, it.iconPack) }
+        }
     }
 
     override fun onCleared() {
@@ -201,6 +211,44 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setSearchBarVisible(visible: Boolean) = edit { it.copy(showSearchBar = visible) }
     fun addPage(after: Int) = edit { it.addPage(after) }
+    fun insertPage(index: Int) = edit { it.insertPage(index) }
+    fun setHomePage(index: Int) = edit { it.copy(homePage = index) }
+    fun setClockVisible(visible: Boolean) = edit { it.copy(showClock = visible) }
+    fun moveInDock(key: String, index: Int) = edit { it.moveInDock(key, index) }
+    fun placeApp(key: String, page: Int, x: Int, y: Int) = edit { it.placeApp(key, page, x, y) }
+    fun setIconPack(packageName: String?) = edit { it.copy(iconPack = packageName) }
+
+    /** Ask once per launch whether to become the default Home app. */
+    var askedToBeDefault = false
+
+    /** Saves a picture as [key]'s icon: decoded at icon size, center-cropped square, stored as PNG. */
+    fun setCustomIcon(key: String, uri: Uri) {
+        viewModelScope.launch {
+            val name = withContext(Dispatchers.IO) {
+                runCatching {
+                    val app = getApplication<Application>()
+                    val source = ImageDecoder.createSource(app.contentResolver, uri)
+                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        val scale = CUSTOM_ICON_PX.toFloat() / minOf(info.size.width, info.size.height)
+                        decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1), (info.size.height * scale).toInt().coerceAtLeast(1))
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    }
+                    val side = minOf(bitmap.width, bitmap.height)
+                    val square = Bitmap.createBitmap(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side)
+                    val file = File(iconLoader.iconDir, "${UUID.randomUUID()}.png")
+                    file.outputStream().use { square.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    file.name
+                }.getOrNull()
+            } ?: return@launch
+            _layout.value.customIcons[key]?.let { File(iconLoader.iconDir, it).delete() }
+            edit { it.copy(customIcons = it.customIcons + (key to name)) }
+        }
+    }
+
+    fun resetIcon(key: String) {
+        _layout.value.customIcons[key]?.let { File(iconLoader.iconDir, it).delete() }
+        edit { it.copy(customIcons = it.customIcons - key) }
+    }
     fun moveToPage(item: HomeItem, from: Int, to: Int) = edit { it.moveToPage(item, from, to) }
 
     /** Removes a page and frees the widgets that were on it. */
@@ -254,3 +302,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun addToFolder(folderId: String, key: String, page: Int) = groupIntoFolder(listOf(key), "", folderId, page)
 }
+
+private const val CUSTOM_ICON_PX = 192
+
