@@ -11,7 +11,7 @@ class LayoutStore(context: Context) {
     fun load(): LauncherLayout =
         prefs.getString(KEY, null)
             ?.let { runCatching { json.decodeFromString<LauncherLayout>(it) }.getOrNull() }
-            ?: LauncherLayout()
+            ?.migrated() ?: LauncherLayout()
 
     fun save(layout: LauncherLayout) {
         prefs.edit().putString(KEY, json.encodeToString(LauncherLayout.serializer(), layout)).apply()

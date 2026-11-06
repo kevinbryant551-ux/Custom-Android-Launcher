@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -32,12 +33,18 @@ fun LauncherRoot(viewModel: LauncherViewModel, actions: LauncherActions) {
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var focusSearch by remember { mutableStateOf(false) }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var widgetPickerPage by rememberSaveable { mutableStateOf<Int?>(null) }
+    val pagerState = rememberPagerState { layout.pages.size }
 
     // Home pressed while we're in front: back to a clean home screen.
     LaunchedEffect(Unit) {
         viewModel.homePresses.collect {
+            val wasClean = !drawerOpen && openFolderId == null && widgetPickerPage == null
             drawerOpen = false
             openFolderId = null
+            widgetPickerPage = null
+            // Home again on a clean screen goes back to the first page.
+            if (wasClean) pagerState.animateScrollToPage(0)
         }
     }
 
@@ -55,8 +62,10 @@ fun LauncherRoot(viewModel: LauncherViewModel, actions: LauncherActions) {
                 appsByKey = appsByKey,
                 viewModel = viewModel,
                 actions = actions,
+                pagerState = pagerState,
                 onOpenDrawer = { search -> focusSearch = search; drawerOpen = true },
                 onOpenFolder = { openFolderId = it },
+                onAddWidget = { widgetPickerPage = it },
             )
             }
 
@@ -71,7 +80,17 @@ fun LauncherRoot(viewModel: LauncherViewModel, actions: LauncherActions) {
                     viewModel = viewModel,
                     actions = actions,
                     focusSearch = focusSearch,
+                    currentPage = pagerState.currentPage,
                     onClose = { drawerOpen = false },
+                )
+            }
+
+            widgetPickerPage?.let { page ->
+                WidgetPicker(
+                    viewModel = viewModel,
+                    appsByKey = appsByKey,
+                    onPick = { info -> widgetPickerPage = null; actions.addWidget(info, page) },
+                    onDismiss = { widgetPickerPage = null },
                 )
             }
 

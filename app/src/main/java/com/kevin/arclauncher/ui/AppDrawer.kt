@@ -114,6 +114,7 @@ fun AppDrawer(
     viewModel: LauncherViewModel,
     actions: LauncherActions,
     focusSearch: Boolean,
+    currentPage: Int,
     onClose: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -172,7 +173,7 @@ fun AppDrawer(
                     onCancel = ::finish,
                     onGroup = { groupDialog = true },
                     onAddHome = {
-                        viewModel.addToHome(selectedApps.map { it.key })
+                        viewModel.addToHome(selectedApps.map { it.key }, currentPage)
                         actions.toast("Added ${selectedApps.size} to home screen")
                         finish()
                     },
@@ -272,7 +273,7 @@ fun AppDrawer(
             onDismiss = { groupDialog = false },
             onConfirm = { name, folderId ->
                 groupDialog = false
-                viewModel.groupIntoFolder(selectedApps.map { it.key }, name, folderId)
+                viewModel.groupIntoFolder(selectedApps.map { it.key }, name, folderId, currentPage)
                 val label = folderId?.let { layout.folders[it]?.name } ?: name.ifBlank { "Folder" }
                 actions.toast("“$label” is on your home screen")
                 finish()

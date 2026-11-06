@@ -1,6 +1,9 @@
 package com.kevin.arclauncher
 
 import android.app.Application
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
+import android.os.Build
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
@@ -18,6 +21,16 @@ import com.kevin.arclauncher.data.HomeItem
 import com.kevin.arclauncher.data.IconLoader
 import com.kevin.arclauncher.data.LauncherLayout
 import com.kevin.arclauncher.data.LayoutStore
+import com.kevin.arclauncher.data.MAX_WIDGET_SPAN_Y
+import com.kevin.arclauncher.data.addPage
+import com.kevin.arclauncher.data.addWidget
+import com.kevin.arclauncher.data.moveToPage
+import com.kevin.arclauncher.data.removePage
+import com.kevin.arclauncher.data.removeWidget
+import com.kevin.arclauncher.data.resizeWidget
+import com.kevin.arclauncher.ui.HOME_COLUMNS
+import com.kevin.arclauncher.ui.WIDGET_ROW_HEIGHT_DP
+import com.kevin.arclauncher.widgets.LauncherWidgetHost
 import com.kevin.arclauncher.data.addToDock
 import com.kevin.arclauncher.data.addToHome
 import com.kevin.arclauncher.data.groupIntoFolder
@@ -39,6 +52,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.math.ceil
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
     private val launcherApps = application.getSystemService(LauncherApps::class.java)
@@ -48,6 +62,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val iconLoader = application.resources.displayMetrics.let {
         IconLoader(it.densityDpi, (64 * it.density).toInt())
     }
+
+    val widgetHost = LauncherWidgetHost(application)
+    private val widgetManager = AppWidgetManager.getInstance(application)
 
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     val apps = _apps.asStateFlow()
@@ -147,7 +164,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             "com.android.settings",
         ).mapNotNull(::keyFor).filterNot { it in dock }
 
-        edit { it.addToDock(dock).addToHome(home).copy(initialized = true) }
+        edit { it.addToDock(dock).addToHome(home, 0).copy(initialized = true) }
     }
 
     private fun edit(change: (LauncherLayout) -> LauncherLayout) {
@@ -155,10 +172,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         store.save(_layout.value)
     }
 
-    fun groupIntoFolder(keys: List<String>, name: String, targetFolderId: String?) =
-        edit { it.groupIntoFolder(keys, name, targetFolderId, UUID.randomUUID().toString()) }
+    fun groupIntoFolder(keys: List<String>, name: String, targetFolderId: String?, page: Int) =
+        edit { it.groupIntoFolder(keys, name, targetFolderId, UUID.randomUUID().toString(), page) }
 
-    fun addToHome(keys: List<String>) = edit { it.addToHome(keys) }
+    fun addToHome(keys: List<String>, page: Int) = edit { it.addToHome(keys, page) }
 
     /** Returns how many of [keys] are now in the dock. */
     fun addToDock(keys: List<String>): Int {
@@ -179,4 +196,46 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun ungroup(id: String) = edit { it.ungroup(id) }
     fun hide(keys: Collection<String>) = edit { it.hide(keys) }
     fun unhide(keys: Collection<String>) = edit { it.unhide(keys) }
+
+    fun setSearchBarVisible(visible: Boolean) = edit { it.copy(showSearchBar = visible) }
+    fun addPage(after: Int) = edit { it.addPage(after) }
+    fun moveToPage(item: HomeItem, from: Int, to: Int) = edit { it.moveToPage(item, from, to) }
+
+    /** Removes a page and frees the widgets that were on it. */
+    fun removePage(index: Int) {
+        _layout.value.pages.getOrNull(index)?.items?.filterIsInstance<HomeItem.Widget>()?.forEach { widgetHost.deleteAppWidgetId(it.id) }
+        edit { it.removePage(index) }
+    }
+
+    /** Widget providers from every user profile, for the widget picker. */
+    fun widgetProviders(): List<AppWidgetProviderInfo> =
+        userManager.userProfiles.flatMap { runCatching { widgetManager.getInstalledProvidersForProfile(it) }.getOrDefault(emptyList()) }
+
+    fun appWidgetInfo(id: Int): AppWidgetProviderInfo? = widgetManager.getAppWidgetInfo(id)
+
+    /** Places an already bound (and configured) widget, sized from the provider's own cell hints. */
+    fun placeWidget(page: Int, id: Int, info: AppWidgetProviderInfo) {
+        val (spanX, spanY) = defaultSpan(info)
+        edit { it.addWidget(page, HomeItem.Widget(id, spanX, spanY)) }
+    }
+
+    fun resizeWidget(id: Int, spanX: Int, spanY: Int) = edit { it.resizeWidget(id, spanX, spanY, HOME_COLUMNS) }
+
+    fun removeWidget(id: Int) {
+        widgetHost.deleteAppWidgetId(id)
+        edit { it.removeWidget(id) }
+    }
+
+    private fun defaultSpan(info: AppWidgetProviderInfo): Pair<Int, Int> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellWidth > 0 && info.targetCellHeight > 0) {
+            return info.targetCellWidth.coerceIn(1, HOME_COLUMNS) to info.targetCellHeight.coerceIn(1, MAX_WIDGET_SPAN_Y)
+        }
+        // minWidth/minHeight are pixels; turn them into our grid cells.
+        val res = getApplication<Application>().resources
+        val density = res.displayMetrics.density
+        val cellWidthDp = (res.configuration.screenWidthDp - 24f) / HOME_COLUMNS
+        val x = ceil(info.minWidth / density / cellWidthDp).toInt().coerceIn(1, HOME_COLUMNS)
+        val y = ceil(info.minHeight / density / WIDGET_ROW_HEIGHT_DP).toInt().coerceIn(1, MAX_WIDGET_SPAN_Y)
+        return x to y
+    }
 }

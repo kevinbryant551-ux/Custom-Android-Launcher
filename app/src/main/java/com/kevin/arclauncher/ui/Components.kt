@@ -150,10 +150,12 @@ fun Modifier.verticalSwipe(
     canSwipeDown: () -> Boolean = { false },
     onSwipeUp: () -> Unit = {},
     onSwipeDown: () -> Unit = {},
+    ignoreAt: (Offset) -> Boolean = { false },
 ): Modifier = pointerInput(Unit) {
     val threshold = 72.dp.toPx()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (ignoreAt(down.position)) return@awaitEachGesture
         val upAllowed = canSwipeUp()
         val downAllowed = canSwipeDown()
         var last = down.position

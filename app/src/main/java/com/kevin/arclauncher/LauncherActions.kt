@@ -1,5 +1,6 @@
 package com.kevin.arclauncher
 
+import android.appwidget.AppWidgetProviderInfo
 import com.kevin.arclauncher.data.AppEntry
 
 /** Things the UI asks the system to do. Implemented by [MainActivity]. */
@@ -11,4 +12,7 @@ interface LauncherActions {
     fun openClock()
     fun expandNotifications()
     fun toast(message: String)
+
+    /** Binds (asking permission if needed), configures, then places a widget on home [page]. */
+    fun addWidget(provider: AppWidgetProviderInfo, page: Int)
 }

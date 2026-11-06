@@ -1,12 +1,15 @@
 package com.kevin.arclauncher
 
 import android.annotation.SuppressLint
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.provider.Settings
@@ -29,6 +32,12 @@ class MainActivity : ComponentActivity(), LauncherActions {
     private val pending = ArrayDeque<Intent>()
     private val chain = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { startNext() }
 
+    // Widget being added: allocated id, provider and target page, kept across the bind/configure screens.
+    private var pendingWidget: Triple<Int, AppWidgetProviderInfo, Int>? = null
+    private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) configureOrPlaceWidget() else cancelPendingWidget()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -40,6 +49,17 @@ class MainActivity : ComponentActivity(), LauncherActions {
                 LauncherRoot(viewModel, this)
             }
         }
+    }
+
+    // The host only receives widget updates while listening; stop when we're not visible.
+    override fun onStart() {
+        super.onStart()
+        runCatching { viewModel.widgetHost.startListening() }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        runCatching { viewModel.widgetHost.stopListening() }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -127,5 +147,63 @@ class MainActivity : ComponentActivity(), LauncherActions {
 
     override fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    override fun addWidget(provider: AppWidgetProviderInfo, page: Int) {
+        val host = viewModel.widgetHost
+        val id = host.allocateAppWidgetId()
+        pendingWidget = Triple(id, provider, page)
+        val manager = AppWidgetManager.getInstance(this)
+        if (manager.bindAppWidgetIdIfAllowed(id, provider.profile, provider.provider, null)) {
+            configureOrPlaceWidget()
+        } else {
+            // First time for this provider: the system asks "Allow Arc Launcher to create widgets?".
+            bindWidget.launch(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, provider.profile),
+            )
+        }
+    }
+
+    private fun configureOrPlaceWidget() {
+        val (id, provider, _) = pendingWidget ?: return
+        val optional = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            provider.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
+        if (provider.configure == null || optional) {
+            placePendingWidget()
+            return
+        }
+        try {
+            viewModel.widgetHost.startAppWidgetConfigureActivityForResult(this, id, 0, REQUEST_CONFIGURE_WIDGET, null)
+        } catch (e: Exception) {
+            toast("Couldn't set up that widget")
+            cancelPendingWidget()
+        }
+    }
+
+    // The configure screen is started by AppWidgetHost with a request code, so its result comes here.
+    @Deprecated("AppWidgetHost only offers the request-code API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CONFIGURE_WIDGET) {
+            if (resultCode == RESULT_OK) placePendingWidget() else cancelPendingWidget()
+        }
+    }
+
+    private fun placePendingWidget() {
+        val (id, provider, page) = pendingWidget ?: return
+        pendingWidget = null
+        viewModel.placeWidget(page, id, provider)
+    }
+
+    private fun cancelPendingWidget() {
+        pendingWidget?.let { viewModel.widgetHost.deleteAppWidgetId(it.first) }
+        pendingWidget = null
+    }
+
+    private companion object {
+        const val REQUEST_CONFIGURE_WIDGET = 11
     }
 }
