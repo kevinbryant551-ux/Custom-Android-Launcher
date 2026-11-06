@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity(), LauncherActions {
         if (manager.bindAppWidgetIdIfAllowed(id, provider.profile, provider.provider, null)) {
             configureOrPlaceWidget()
         } else {
-            // First time for this provider: the system asks "Allow Arc Launcher to create widgets?".
+            // First time for this provider: the system asks "Allow Bear Bones to create widgets?".
             bindWidget.launch(
                 Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)

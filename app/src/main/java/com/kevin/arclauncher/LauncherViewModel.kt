@@ -20,6 +20,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kevin.arclauncher.data.AppEntry
 import com.kevin.arclauncher.data.HomeItem
+import com.kevin.arclauncher.data.IconPack
 import com.kevin.arclauncher.data.IconLoader
 import com.kevin.arclauncher.data.LauncherLayout
 import com.kevin.arclauncher.data.LayoutStore
@@ -176,7 +177,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             "com.android.settings",
         ).mapNotNull(::keyFor).filterNot { it in dock }
 
-        edit { it.addToDock(dock).addToHome(home, 0).copy(initialized = true) }
+        // New installs start with the built-in Bear Bones icons when the app ships them.
+        val pack = if (IconPack.hasBuiltIn(getApplication())) getApplication<Application>().packageName else null
+        edit { it.addToDock(dock).addToHome(home, 0).copy(initialized = true, iconPack = pack) }
     }
 
     private fun edit(change: (LauncherLayout) -> LauncherLayout) {

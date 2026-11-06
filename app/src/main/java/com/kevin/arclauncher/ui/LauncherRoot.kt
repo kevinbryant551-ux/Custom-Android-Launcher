@@ -218,8 +218,8 @@ fun LauncherRoot(viewModel: LauncherViewModel, actions: LauncherActions) {
     if (askDefault) {
         AlertDialog(
             onDismissRequest = { askDefault = false },
-            title = { Text("Make Arc Launcher your home screen?") },
-            text = { Text("Pick Arc Launcher under Default home app, and Home will always bring you here.") },
+            title = { Text("Make Bear Bones your home screen?") },
+            text = { Text("Pick Bear Bones under Default home app, and Home will always bring you here.") },
             confirmButton = { TextButton(onClick = { askDefault = false; actions.openDefaultHomeSettings() }) { Text("Yes") } },
             dismissButton = { TextButton(onClick = { askDefault = false }) { Text("Not now") } },
         )

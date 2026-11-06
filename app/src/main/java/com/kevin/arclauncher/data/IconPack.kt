@@ -3,6 +3,7 @@ package com.kevin.arclauncher.data
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.graphics.drawable.Drawable
@@ -18,8 +19,12 @@ class IconPack private constructor(
     private val res: Resources,
     private val drawableByComponent: Map<String, String>,
 ) {
-    fun iconFor(component: ComponentName, densityDpi: Int): Drawable? {
-        val name = drawableByComponent[component.flattenToString()] ?: return null
+    /**
+     * The pack's icon for [component]; if the pack doesn't list it, a glyph for the app's Android
+     * [category] (ApplicationInfo.CATEGORY_*) when the pack has one (the built-in pack does).
+     */
+    fun iconFor(component: ComponentName, category: Int, densityDpi: Int): Drawable? {
+        val name = drawableByComponent[component.flattenToString()] ?: categoryGlyph(category) ?: return null
         val id = res.getIdentifier(name, "drawable", packageName)
         if (id == 0) return null
         return runCatching { res.getDrawableForDensity(id, densityDpi, null) }.getOrNull()
@@ -29,13 +34,30 @@ class IconPack private constructor(
         // Intent actions icon packs register so launchers can find them.
         private val PACK_ACTIONS = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.gau.go.launcherex.theme")
 
-        /** Installed icon packs as (package, label), sorted by label. */
+        /** Installed icon packs as (package, label), the built-in Bear Bones pack first when present. */
         fun installed(context: Context): List<Pair<String, String>> {
             val pm = context.packageManager
-            return PACK_ACTIONS.flatMap { action -> pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA) }
+            val builtIn = if (hasBuiltIn(context)) listOf(context.packageName to "Bear Bones (built-in)") else emptyList()
+            return builtIn + PACK_ACTIONS.flatMap { action -> pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA) }
                 .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
                 .distinctBy { it.first }
                 .sortedBy { it.second.lowercase() }
+        }
+
+        /** True once tools/iconpack/import.py has added icons to this app. */
+        fun hasBuiltIn(context: Context): Boolean =
+            context.resources.getIdentifier("appfilter", "xml", context.packageName) != 0
+
+        private fun categoryGlyph(category: Int): String? = when (category) {
+            ApplicationInfo.CATEGORY_GAME -> "bb_games"
+            ApplicationInfo.CATEGORY_AUDIO -> "bb_music"
+            ApplicationInfo.CATEGORY_VIDEO -> "bb_video"
+            ApplicationInfo.CATEGORY_IMAGE -> "bb_photos"
+            ApplicationInfo.CATEGORY_SOCIAL -> "bb_chat"
+            ApplicationInfo.CATEGORY_NEWS -> "bb_forum"
+            ApplicationInfo.CATEGORY_MAPS -> "bb_maps"
+            ApplicationInfo.CATEGORY_PRODUCTIVITY -> "bb_notes"
+            else -> null
         }
 
         /** Reads a pack's appfilter.xml (from res/xml or assets). Slow: call off the main thread. */

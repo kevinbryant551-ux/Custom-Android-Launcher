@@ -44,7 +44,7 @@ class IconLoader(private val context: Context, private val densityDpi: Int, priv
     suspend fun load(app: AppEntry): ImageBitmap = cache.get(app.key) ?: withContext(Dispatchers.IO) {
         val custom = customIcons[app.key]?.let { BitmapFactory.decodeFile(File(iconDir, it).path) }?.scale(sizePx, sizePx)
         val bitmap = custom
-            ?: pack?.iconFor(app.component, densityDpi)?.toBitmap(sizePx, sizePx)
+            ?: pack?.iconFor(app.component, app.info.applicationInfo.category, densityDpi)?.toBitmap(sizePx, sizePx)
             // getBadgedIcon adds the briefcase badge to work-profile apps.
             ?: app.info.getBadgedIcon(densityDpi).toBitmap(sizePx, sizePx)
         bitmap.asImageBitmap()

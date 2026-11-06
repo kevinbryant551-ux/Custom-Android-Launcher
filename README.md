@@ -1,6 +1,6 @@
-# Arc Launcher
+# Bear Bones Launcher
 
-An original Android home-screen launcher for the Pixel 8a (Android 14/15, works on 10+), written in
+A bare-bones, customizable Android home-screen launcher. It collects no data and doesn't even request internet access. An original launcher for the Pixel 8a (Android 14/15, works on 10+), written in
 **Kotlin** with **Jetpack Compose** and **Material 3**. Inspired by the feature set of launchers like
 Microsoft Launcher, with its own look.
 
@@ -39,7 +39,7 @@ or, with an APK you already have:
 ~/Android/Sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-4. Press **Home** and pick **Arc Launcher** → **Always**. To switch later: **Settings > Apps > Default apps > Home app**.
+4. Press **Home** and pick **Bear Bones** → **Always**. To switch later: **Settings > Apps > Default apps > Home app**.
 
 If several devices are connected (for example a Quest headset), pick the phone with `adb devices` and `adb -s <serial> install -r ...`.
 
@@ -63,3 +63,10 @@ To remove it: switch the Home app back to Pixel Launcher, then `adb uninstall co
 ## Not done yet
 
 Dragging home items across pages (drawer drags can flip pages; home items use Move to previous / next page) and dragging home items into the dock.
+
+## Branding and the built-in icon pack
+
+The app icon is a vector bear head in bone white on espresso brown (`res/drawable/ic_launcher_*`), with a monochrome layer for Android 13+ themed icons.
+
+The built-in **Bear Bones** icon pack is generic line glyphs (no brand logos) mapped to common apps in `tools/iconpack/glyphs.txt`. Apps not listed fall back to a glyph for their Android app category (games, music, video and so on). To make or replace the icons, use the prompt in `tools/iconpack/CHATGPT_PROMPT.md`, then run `python3 tools/iconpack/import.py <zip>` and rebuild.
+
