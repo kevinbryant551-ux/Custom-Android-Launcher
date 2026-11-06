@@ -13,7 +13,7 @@ Microsoft Launcher, with its own look.
 - **Removable clock and search bar**: long-press either → Remove, or toggle them from the home long-press menu. Hiding the clock gives the home page a sixth row.
 - **Dock** of up to 5 apps (seeded on first run with your default Phone, Messages, Browser and Camera). Long-press and drag an icon sideways to reorder it.
 - **Drag from the drawer**: long-press an app in the drawer and, without lifting, move it. The drawer gets out of the way and you drop the app on any home cell, onto another app to make a folder, onto a folder, or onto the dock. Hold it at the screen edge to flip pages.
-- **Custom icons**: long-press an app (home, dock, or one selected app in the drawer) → **Change icon** to use any picture (Android photo picker, no storage permission), or **Reset icon**. Long-press empty home space → **Icon pack** to use any installed pack in the standard ADW/Nova `appfilter.xml` format.
+- **Custom icons**: long-press an app (home, dock, or one selected app in the drawer) → **Change icon** to use any picture (Android photo picker, no storage permission), or **Reset icon**. Long-press empty home space → **Icon pack** to use any installed pack in the standard ADW/Nova `appfilter.xml` format. Apps keep their standard icons by default.
 - **Default launcher prompt**: each time the app opens while it isn't your Home app, it asks once; **Yes** opens Android's Default home app screen.
 - **App drawer**: swipe up (or tap the ^ handle). Alphabetical with **sticky letter headers** (`#` for anything that doesn't start with A–Z), an **A–Z fast-scroll strip** you can drag, and **search** (substring or initials, e.g. "gm" finds Google Maps; the keyboard's Go key opens the best match).
 - **Bulk selection**: long-press any app in the drawer to enter selection mode, tap more apps to check them, then use the **⋮ menu at the top right**: Group into folder, Add to home screen, Add to dock, App info, Uninstall, Hide / Unhide, Select all, Cancel.
@@ -68,5 +68,5 @@ Dragging home items across pages (drawer drags can flip pages; home items use Mo
 
 The app icon is a vector bear head in bone white on espresso brown (`res/drawable/ic_launcher_*`), with a monochrome layer for Android 13+ themed icons.
 
-The built-in **Bear Bones** icon pack is generic line glyphs (no brand logos) mapped to common apps in `tools/iconpack/glyphs.txt`. Apps not listed fall back to a glyph for their Android app category (games, music, video and so on). To make or replace the icons, use the prompt in `tools/iconpack/CHATGPT_PROMPT.md`, then run `python3 tools/iconpack/import.py <zip>` and rebuild.
+The built-in **Bear Bones** icon pack is an easter egg: tap the date under the clock five times quickly to switch to it (again to switch back); it isn't listed under Icon pack. It's generic line glyphs (no brand logos) mapped to common apps in `tools/iconpack/glyphs.txt`. Apps not listed fall back to a glyph for their Android app category (games, music, video and so on). To make or replace the icons, use the prompt in `tools/iconpack/CHATGPT_PROMPT.md`, then run `python3 tools/iconpack/import.py <zip>` and rebuild.
 

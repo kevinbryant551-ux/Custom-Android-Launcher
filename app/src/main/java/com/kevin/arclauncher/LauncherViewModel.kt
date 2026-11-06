@@ -177,9 +177,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             "com.android.settings",
         ).mapNotNull(::keyFor).filterNot { it in dock }
 
-        // New installs start with the built-in Bear Bones icons when the app ships them.
-        val pack = if (IconPack.hasBuiltIn(getApplication())) getApplication<Application>().packageName else null
-        edit { it.addToDock(dock).addToHome(home, 0).copy(initialized = true, iconPack = pack) }
+        edit { it.addToDock(dock).addToHome(home, 0).copy(initialized = true) }
     }
 
     private fun edit(change: (LauncherLayout) -> LauncherLayout) {
@@ -220,6 +218,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun moveInDock(key: String, index: Int) = edit { it.moveInDock(key, index) }
     fun placeApp(key: String, page: Int, x: Int, y: Int) = edit { it.placeApp(key, page, x, y) }
     fun setIconPack(packageName: String?) = edit { it.copy(iconPack = packageName) }
+
+    /**
+     * Easter egg: switches to the hidden built-in bear icons, or back to the apps' own icons.
+     * Returns the message to show.
+     */
+    fun toggleBearIcons(): String {
+        val app = getApplication<Application>()
+        if (!IconPack.hasBuiltIn(app)) return "The bears are still hibernating."
+        val on = _layout.value.iconPack != app.packageName
+        setIconPack(if (on) app.packageName else null)
+        return if (on) "Bear mode on." else "Bear mode off."
+    }
 
     /** Ask once per launch whether to become the default Home app. */
     var askedToBeDefault = false

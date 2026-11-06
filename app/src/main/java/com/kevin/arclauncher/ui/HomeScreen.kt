@@ -290,7 +290,11 @@ private fun HomePageContent(
             // Registered as items so a long-press on them isn't also taken as a long-press on the page.
             if (layout.showClock) {
                 Box(Modifier.onGloballyPositioned { itemBounds["ui:clock"] = it.boundsInRoot() }) {
-                    ClockGlance(onClick = actions::openClock, onRemove = { viewModel.setClockVisible(false) })
+                    ClockGlance(
+                        onClick = actions::openClock,
+                        onRemove = { viewModel.setClockVisible(false) },
+                        onEasterEgg = { actions.toast(viewModel.toggleBearIcons()) },
+                    )
                 }
                 DisposableEffect(Unit) { onDispose { itemBounds.remove("ui:clock") } }
             }
@@ -633,7 +637,10 @@ private fun PageIndicator(count: Int, current: Int) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ClockGlance(onClick: () -> Unit, onRemove: () -> Unit) {
+private fun ClockGlance(onClick: () -> Unit, onRemove: () -> Unit, onEasterEgg: () -> Unit) {
+    // Tapping the date 5 times in a row (within 2 s) toggles the hidden bear icons.
+    var dateTaps by remember { mutableStateOf(0) }
+    var firstTapAt by remember { mutableLongStateOf(0L) }
     val haptics = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -662,7 +669,17 @@ private fun ClockGlance(onClick: () -> Unit, onRemove: () -> Unit) {
                 .padding(8.dp),
         ) {
             Text(time, style = MaterialTheme.typography.displayLarge.copy(color = Color.White, fontWeight = FontWeight.Light, shadow = TextShadow))
-            Text(date, style = MaterialTheme.typography.titleMedium.copy(color = Color.White, shadow = TextShadow))
+            Text(
+                date,
+                style = MaterialTheme.typography.titleMedium.copy(color = Color.White, shadow = TextShadow),
+                modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures {
+                        val now = System.currentTimeMillis()
+                        if (now - firstTapAt > 2_000) { firstTapAt = now; dateTaps = 0 }
+                        if (++dateTaps == 5) { dateTaps = 0; onEasterEgg() }
+                    }
+                },
+            )
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("Remove clock") }, onClick = { menu = false; onRemove() })

@@ -7,7 +7,7 @@ code, so they come out consistent and named exactly as the app expects. Then imp
 python3 tools/iconpack/import.py ~/Downloads/bear-bones-icons.zip
 ```
 
-Rebuild the app and pick **Icon pack → Bear Bones (built-in)** (new installs use it automatically).
+Rebuild the app. It's an easter egg: tap the date under the clock five times quickly to turn bear icons on or off.
 
 ---
 
