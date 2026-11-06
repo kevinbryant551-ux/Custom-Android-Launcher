@@ -7,6 +7,7 @@ Microsoft Launcher, with its own look.
 ## Features
 
 - **Home screen** over your wallpaper: clock and date glance (tap opens alarms), a search pill, a 4-column grid of apps, folders and widgets.
+- **Movable icons / custom layouts**: each home page is a fixed grid (4 columns; 5 rows on page 1 under the clock, 6 on the others). Long-press an app, folder or widget and drag it to any free cell; an outline shows where it will land and gaps are kept. Drop an app on another app to make a folder there, or onto a folder to add it. Lifting without moving leaves the long-press menu open instead.
 - **Multiple home pages**: swipe sideways; dots show where you are. Long-press empty space → **Add page** (empty pages are kept) or **Remove this page**. Apps, folders and widgets have **Move to previous / next page**. Home on a clean screen returns to page 1.
 - **Widgets**: long-press empty space → **Add widget** opens a picker grouped by app with previews. Android asks once to allow widget access, and widgets with a setup screen open it. Long-press a widget to **Resize** (width 1–4, height 1–6 cells), move it between pages, or **Remove** it.
 - **Removable search bar**: long-press it → Remove search bar, or toggle it from the home long-press menu.
@@ -49,7 +50,8 @@ To remove it: switch the Home app back to Pixel Launcher, then `adb uninstall co
 - **Icons** are loaded off the main thread with `LauncherActivityInfo.getBadgedIcon` and kept in an **LRU cache**.
 - **Sorting** uses a locale-aware `Collator`; accents are stripped with Unicode **NFD normalization** so "Évernote" files under E. The drawer is a `LazyColumn` with **`stickyHeader`** per letter and rows of 4; the fast-scroller maps the touch position to a letter and calls `scrollToItem` on that header (letters with no apps jump to the next one that has some).
 - **Uninstall** uses the system **`ACTION_DELETE`** dialog (needs the normal `REQUEST_DELETE_PACKAGES` permission). For several apps, intents are queued and each starts when the previous dialog returns (`registerForActivityResult`), so you confirm them one by one. Built-in system apps are skipped with a note, since they can only be disabled from App info.
-- **Pages** are a Compose `HorizontalPager`; each page is a `LazyVerticalGrid` where widgets use `GridItemSpan` to cover several columns.
+- **Pages** are a Compose `HorizontalPager`; each page is a fixed cell grid laid out with `BoxWithConstraints` and absolute offsets. Each page stores a `cells` map (item → x, y). A pure `placeItems` function keeps saved cells, gives new items the first free spot, and `normalized()` spills anything that doesn't fit onto the next page, so nothing is ever hidden.
+- **Drag-and-drop** uses one pointer detector per tile (`homeItemGestures`): tap before the long-press timeout launches, long-press opens the menu, and moving past touch slop turns into a drag. The tile stays in place (dimmed) while a "ghost" copy follows the finger. Widgets do the same through their `AppWidgetHostView`, calling `requestDisallowInterceptTouchEvent` so the pager doesn't steal the drag.
 - **Widgets** use the platform **`AppWidgetHost`** (started in `onStart`, stopped in `onStop`): `allocateAppWidgetId` → `bindAppWidgetIdIfAllowed`, or the system **`ACTION_APPWIDGET_BIND`** permission prompt → the provider's configure activity via `startAppWidgetConfigureActivityForResult` → placed with a size from `targetCellWidth/Height` (Android 12+) or `minWidth/minHeight`. The real size is reported back with `updateAppWidgetSize` so widgets pick the right layout. Widgets are Android Views shown through Compose **`AndroidView`** interop; a custom `AppWidgetHostView` watches `onInterceptTouchEvent` to catch long-presses before the widget's own buttons do. Swipe and long-press detectors skip widget areas so scrolling widgets still scroll.
 - **Layout** (pages, dock, folders, hidden) is one `kotlinx.serialization` JSON blob in `SharedPreferences`. Apps are referenced by `package/.Activity#userSerial`. Layout edits are pure functions in `data/LauncherLayout.kt`, covered by unit tests (`./gradlew testDebugUnitTest`).
 - **Gestures**: swipe up/down is detected on the **Initial pointer pass** without consuming touches, so it doesn't fight with taps, long-presses or scrolling.
@@ -57,4 +59,4 @@ To remove it: switch the Home app back to Pixel Launcher, then `adb uninstall co
 
 ## Not done yet
 
-Drag-and-drop rearranging (items move between pages from their menus for now) and icon packs.
+Dragging across pages (use Move to previous / next page for now), dragging into the dock, and icon packs.

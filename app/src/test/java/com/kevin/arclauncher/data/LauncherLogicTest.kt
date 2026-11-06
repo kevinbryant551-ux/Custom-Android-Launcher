@@ -112,4 +112,49 @@ class LauncherLogicTest {
         assertEquals(listOf<HomeItem>(resized), l.pages[0].items)
         assertTrue(l.removeWidget(7).allItems.isEmpty())
     }
+
+    @Test
+    fun savedCellsAreKeptAndOthersFillFirstFreeSpot() {
+        val a = HomeItem.App("a")
+        val b = HomeItem.App("b")
+        val w = HomeItem.Widget(1, 2, 2)
+        val (placed, overflow) = placeItems(listOf(a, b, w), mapOf(a.cellKey to Cell(3, 4), w.cellKey to Cell(0, 0)), 4, 5)
+        assertTrue(overflow.isEmpty())
+        assertEquals(Placed(a, 3, 4, 1, 1), placed[0])
+        assertEquals(Placed(b, 2, 0, 1, 1), placed[1]) // first free cell after the 2x2 widget
+        assertEquals(Placed(w, 0, 0, 2, 2), placed[2])
+    }
+
+    @Test
+    fun overflowSpillsOntoANewPage() {
+        val apps = (1..FIRST_PAGE_ROWS * HOME_COLUMNS + 3).map { HomeItem.App("app$it") }
+        val out = LauncherLayout(pages = listOf(HomePage(apps))).normalized()
+        assertEquals(2, out.pages.size)
+        assertEquals(FIRST_PAGE_ROWS * HOME_COLUMNS, out.pages[0].items.size)
+        assertEquals(3, out.pages[1].items.size)
+        assertEquals(Cell(0, 0), out.pages[1].cells[apps.last().let { apps[apps.size - 3] }.cellKey])
+    }
+
+    @Test
+    fun moveItemOnlyIntoFreeCells() {
+        val a = HomeItem.App("a")
+        val b = HomeItem.App("b")
+        val l = LauncherLayout(pages = listOf(HomePage(listOf(a, b)))).normalized()
+        assertEquals(null, l.moveItem(0, a, 1, 0)) // b is there
+        val moved = l.moveItem(0, a, 2, 3)!!.normalized()
+        assertEquals(Cell(2, 3), moved.pages[0].cells[a.cellKey])
+        assertEquals(Cell(1, 0), moved.pages[0].cells[b.cellKey]) // b stays put
+    }
+
+    @Test
+    fun droppingAppOnAppMakesFolderInTargetCell() {
+        val a = HomeItem.App("a")
+        val b = HomeItem.App("b")
+        val l = LauncherLayout(pages = listOf(HomePage(listOf(a, b), mapOf(a.cellKey to Cell(0, 0), b.cellKey to Cell(3, 2)))))
+        val out = l.groupIntoFolder(listOf("b", "a"), "Folder", null, "f").normalized()
+        assertEquals(listOf<HomeItem>(HomeItem.FolderRef("f")), out.pages[0].items)
+        assertEquals(Cell(3, 2), out.pages[0].cells["folder:f"])
+        assertEquals(listOf("b", "a"), out.folders["f"]!!.apps)
+    }
 }
+

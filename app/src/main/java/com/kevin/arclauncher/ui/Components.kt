@@ -38,6 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -74,13 +80,15 @@ fun AppTile(
     icon: @Composable () -> Unit,
     badge: @Composable BoxScope.() -> Unit = {},
     menu: @Composable () -> Unit = {},
+    /** Replaces the default click / long-click handling (home screen tiles use [homeItemGestures]). */
+    gestures: Modifier? = null,
 ) {
     Box(modifier) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Options")
+                .then(gestures ?: Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Options"))
                 .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -151,6 +159,7 @@ fun Modifier.verticalSwipe(
     onSwipeUp: () -> Unit = {},
     onSwipeDown: () -> Unit = {},
     ignoreAt: (Offset) -> Boolean = { false },
+    cancelIf: () -> Boolean = { false },
 ): Modifier = pointerInput(Unit) {
     val threshold = 72.dp.toPx()
     awaitEachGesture {
@@ -169,8 +178,64 @@ fun Modifier.verticalSwipe(
         }
         val dx = last.x - down.position.x
         val dy = last.y - down.position.y
-        if (multiTouch || abs(dy) < threshold || abs(dy) < abs(dx) * 1.5f) return@awaitEachGesture
+        if (cancelIf() || multiTouch || abs(dy) < threshold || abs(dy) < abs(dx) * 1.5f) return@awaitEachGesture
         if (dy < 0 && upAllowed) onSwipeUp()
         if (dy > 0 && downAllowed) onSwipeDown()
     }
 }
+
+/**
+ * Tap, long-press, and long-press-then-drag in one detector, for movable home items.
+ * Tap fires on release before the long-press timeout; long-press fires after it (e.g. to show a menu);
+ * moving past touch slop after that turns it into a drag that reports pointer deltas in px.
+ */
+fun Modifier.homeItemGestures(
+    label: String,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+): Modifier = semantics {
+    role = Role.Button
+    onClick(label) { onTap(); true }
+    onLongClick("Options") { onLongPress(); true }
+}.pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val slop = viewConfiguration.touchSlop
+        var released = false
+        var cancelled = false
+        val beforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                if (change == null) { cancelled = true; break }
+                if (!change.pressed) { released = true; change.consume(); break }
+                if (change.isConsumed || (change.position - down.position).getDistance() > slop) { cancelled = true; break }
+            }
+        }
+        if (beforeTimeout != null) {
+            if (released && !cancelled) onTap()
+            return@awaitEachGesture
+        }
+        onLongPress()
+        var total = Offset.Zero
+        var dragging = false
+        while (true) {
+            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) { change.consume(); break }
+            val delta = change.positionChange()
+            change.consume()
+            total += delta
+            if (!dragging && total.getDistance() > slop) {
+                dragging = true
+                onDragStart()
+                onDrag(total)
+            } else if (dragging) {
+                onDrag(delta)
+            }
+        }
+        if (dragging) onDragEnd()
+    }
+}
+

@@ -28,7 +28,9 @@ import com.kevin.arclauncher.data.moveToPage
 import com.kevin.arclauncher.data.removePage
 import com.kevin.arclauncher.data.removeWidget
 import com.kevin.arclauncher.data.resizeWidget
-import com.kevin.arclauncher.ui.HOME_COLUMNS
+import com.kevin.arclauncher.data.HOME_COLUMNS
+import com.kevin.arclauncher.data.moveItem
+import com.kevin.arclauncher.data.normalized
 import com.kevin.arclauncher.ui.WIDGET_ROW_HEIGHT_DP
 import com.kevin.arclauncher.widgets.LauncherWidgetHost
 import com.kevin.arclauncher.data.addToDock
@@ -168,7 +170,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun edit(change: (LauncherLayout) -> LauncherLayout) {
-        _layout.update(change)
+        _layout.update { change(it).normalized() }
         store.save(_layout.value)
     }
 
@@ -238,4 +240,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val y = ceil(info.minHeight / density / WIDGET_ROW_HEIGHT_DP).toInt().coerceIn(1, MAX_WIDGET_SPAN_Y)
         return x to y
     }
+
+    /** Drag-and-drop: returns false if the spot is taken. */
+    fun moveItem(page: Int, item: HomeItem, x: Int, y: Int): Boolean {
+        val moved = _layout.value.moveItem(page, item, x, y) ?: return false
+        edit { moved }
+        return true
+    }
+
+    /** Dropping one app onto another makes a folder in the target's spot. */
+    fun dropOnApp(page: Int, target: HomeItem.App, dragged: HomeItem.App) =
+        groupIntoFolder(listOf(target.key, dragged.key), "Folder", null, page)
+
+    fun addToFolder(folderId: String, key: String, page: Int) = groupIntoFolder(listOf(key), "", folderId, page)
 }

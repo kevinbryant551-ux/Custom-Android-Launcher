@@ -16,8 +16,15 @@ data class LauncherLayout(
     @SerialName("home") val legacyHome: List<HomeItem> = emptyList(),
 )
 
+/**
+ * One home page. [items] keeps insertion order; [cells] pins each item (by [cellKey]) to a grid cell.
+ * Items without a valid cell are given the first free one by [normalized].
+ */
 @Serializable
-data class HomePage(val items: List<HomeItem> = emptyList())
+data class HomePage(val items: List<HomeItem> = emptyList(), val cells: Map<String, Cell> = emptyMap())
+
+@Serializable
+data class Cell(val x: Int, val y: Int)
 
 @Serializable
 data class Folder(val id: String, val name: String, val apps: List<String>)
@@ -38,8 +45,21 @@ sealed interface HomeItem {
     data class Widget(val id: Int, val spanX: Int, val spanY: Int) : HomeItem
 }
 
+/** Stable id of an item within a page's [HomePage.cells]. */
+val HomeItem.cellKey: String
+    get() = when (this) {
+        is HomeItem.App -> "app:$key"
+        is HomeItem.FolderRef -> "folder:$id"
+        is HomeItem.Widget -> "widget:$id"
+    }
+
 const val DOCK_CAPACITY = 5
-const val MAX_WIDGET_SPAN_Y = 6
+const val HOME_COLUMNS = 4
+const val FIRST_PAGE_ROWS = 5 // page 1 also holds the clock and search bar
+const val PAGE_ROWS = 6
+const val MAX_WIDGET_SPAN_Y = PAGE_ROWS
+
+fun rowsForPage(index: Int) = if (index == 0) FIRST_PAGE_ROWS else PAGE_ROWS
 
 fun LauncherLayout.migrated(): LauncherLayout {
     if (legacyHome.isEmpty()) return if (pages.isEmpty()) copy(pages = listOf(HomePage())) else this
@@ -79,19 +99,24 @@ fun LauncherLayout.groupIntoFolder(
     fun dropped(item: HomeItem) =
         (item is HomeItem.App && item.key in keySet) || (item is HomeItem.FolderRef && item.id in emptied)
 
-    val alreadyPlaced = allItems.any { it is HomeItem.FolderRef && it.id == folder.id && folder.id !in emptied }
-    val firstPage = pages.indexOfFirst { p -> p.items.any { it is HomeItem.App && it.key in keySet } }
+    // The folder takes the slot of the first key (in [keys] order) that is on a home page.
+    val anchor = keys.firstOrNull { k -> allItems.any { it is HomeItem.App && it.key == k } }?.let { HomeItem.App(it) }
+    val alreadyPlaced = allItems.any { it is HomeItem.FolderRef && it.id == folder.id }
+    val anchorPage = if (anchor == null) -1 else pages.indexOfFirst { anchor in it.items }
+    val ref = HomeItem.FolderRef(folder.id)
     val newPages = pages.mapIndexed { index, page ->
         val kept = page.items.filterNot(::dropped).toMutableList()
+        var cells = page.cells
         if (!alreadyPlaced) {
-            if (index == firstPage) {
-                val firstPos = page.items.indexOfFirst { it is HomeItem.App && it.key in keySet }
-                kept.add(page.items.take(firstPos).count { !dropped(it) }, HomeItem.FolderRef(folder.id))
-            } else if (firstPage < 0 && index == pageIndex(currentPage)) {
-                kept.add(HomeItem.FolderRef(folder.id))
+            if (index == anchorPage) {
+                val pos = page.items.indexOf(anchor!!)
+                kept.add(page.items.take(pos).count { !dropped(it) }, ref)
+                page.cells[anchor.cellKey]?.let { cells = cells + (ref.cellKey to it) }
+            } else if (anchorPage < 0 && index == pageIndex(currentPage)) {
+                kept.add(ref)
             }
         }
-        page.copy(items = kept)
+        page.copy(items = kept, cells = cells)
     }
     return copy(pages = newPages, folders = newFolders)
 }
@@ -183,3 +208,86 @@ fun LauncherLayout.moveToPage(item: HomeItem, from: Int, to: Int): LauncherLayou
         }
     })
 }
+
+data class Placed(val item: HomeItem, val x: Int, val y: Int, val w: Int, val h: Int) {
+    fun covers(cx: Int, cy: Int) = cx in x until x + w && cy in y until y + h
+    fun overlaps(ox: Int, oy: Int, ow: Int, oh: Int) = ox < x + w && x < ox + ow && oy < y + h && y < oy + oh
+}
+
+/** Cells an item covers: 1x1 for apps and folders, the widget's span (clamped to the grid) for widgets. */
+fun HomeItem.span(columns: Int, rows: Int): Pair<Int, Int> =
+    if (this is HomeItem.Widget) spanX.coerceIn(1, columns) to spanY.coerceIn(1, rows) else 1 to 1
+
+/**
+ * Lays items out on a [columns] x [rows] grid. Items keep their saved cell when it's free; the rest
+ * take the first free spot, reading left-to-right, top-to-bottom. Returns what fit and what didn't.
+ */
+fun placeItems(items: List<HomeItem>, cells: Map<String, Cell>, columns: Int, rows: Int): Pair<List<Placed>, List<HomeItem>> {
+    val taken = Array(rows) { BooleanArray(columns) }
+    fun fits(x: Int, y: Int, w: Int, h: Int) =
+        x >= 0 && y >= 0 && x + w <= columns && y + h <= rows && (y until y + h).all { r -> (x until x + w).none { taken[r][it] } }
+    fun take(x: Int, y: Int, w: Int, h: Int) {
+        for (r in y until y + h) for (c in x until x + w) taken[r][c] = true
+    }
+
+    val placed = arrayOfNulls<Placed>(items.size)
+    val waiting = mutableListOf<Int>()
+    items.forEachIndexed { i, item ->
+        val (w, h) = item.span(columns, rows)
+        val cell = cells[item.cellKey]
+        if (cell != null && fits(cell.x, cell.y, w, h)) {
+            take(cell.x, cell.y, w, h)
+            placed[i] = Placed(item, cell.x, cell.y, w, h)
+        } else {
+            waiting += i
+        }
+    }
+    val overflow = mutableListOf<HomeItem>()
+    for (i in waiting) {
+        val item = items[i]
+        val (w, h) = item.span(columns, rows)
+        val spot = (0..rows - h).asSequence().flatMap { y -> (0..columns - w).asSequence().map { x -> x to y } }
+            .firstOrNull { (x, y) -> fits(x, y, w, h) }
+        if (spot == null) {
+            overflow += item
+        } else {
+            take(spot.first, spot.second, w, h)
+            placed[i] = Placed(item, spot.first, spot.second, w, h)
+        }
+    }
+    return placed.filterNotNull() to overflow
+}
+
+/**
+ * Gives every home item a concrete cell. Items that don't fit on their page spill onto the next
+ * page (adding one if needed), so nothing on the home screen is ever silently hidden.
+ */
+fun LauncherLayout.normalized(): LauncherLayout {
+    val out = mutableListOf<HomePage>()
+    var carry = emptyList<HomeItem>()
+    var i = 0
+    while (i < pages.size || carry.isNotEmpty()) {
+        val page = pages.getOrElse(i) { HomePage() }
+        val (placed, overflow) = placeItems(page.items + carry, page.cells, HOME_COLUMNS, rowsForPage(i))
+        val order = placed.map { it.item }
+        out += HomePage(
+            items = (page.items + carry).filter { it in order },
+            cells = placed.associate { it.item.cellKey to Cell(it.x, it.y) },
+        )
+        carry = overflow
+        i++
+    }
+    return copy(pages = out)
+}
+
+/** Moves an item to cell ([x], [y]) on [page]. Returns null if it doesn't fit there. */
+fun LauncherLayout.moveItem(page: Int, item: HomeItem, x: Int, y: Int): LauncherLayout? {
+    val pg = pages.getOrNull(page) ?: return null
+    val rows = rowsForPage(page)
+    val (w, h) = item.span(HOME_COLUMNS, rows)
+    if (x < 0 || y < 0 || x + w > HOME_COLUMNS || y + h > rows) return null
+    val others = placeItems(pg.items, pg.cells, HOME_COLUMNS, rows).first.filter { it.item != item }
+    if (others.any { it.overlaps(x, y, w, h) }) return null
+    return copy(pages = pages.mapIndexed { i, p -> if (i == page) p.copy(cells = p.cells + (item.cellKey to Cell(x, y))) else p })
+}
+

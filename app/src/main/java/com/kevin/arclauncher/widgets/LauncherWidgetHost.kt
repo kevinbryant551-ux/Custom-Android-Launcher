@@ -27,12 +27,22 @@ class LauncherWidgetHost(context: Context) : AppWidgetHost(context, HOST_ID) {
 class LongPressWidgetView(context: Context) : AppWidgetHostView(context) {
     var onLongPress: (() -> Unit)? = null
 
+    /** After a long-press, moving the finger drags the widget: start, then deltas in px, then end. */
+    var onDragStart: (() -> Unit)? = null
+    var onDrag: ((Float, Float) -> Unit)? = null
+    var onDragEnd: (() -> Unit)? = null
+    private var dragging = false
+    private var lastRawX = 0f
+    private var lastRawY = 0f
+
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private var downX = 0f
     private var downY = 0f
     private var longPressed = false
     private val trigger = Runnable {
         longPressed = true
+        // Keep the home pager from stealing the gesture while the widget is held / dragged.
+        parent?.requestDisallowInterceptTouchEvent(true)
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         onLongPress?.invoke()
     }
@@ -41,6 +51,9 @@ class LongPressWidgetView(context: Context) : AppWidgetHostView(context) {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 longPressed = false
+                dragging = false
+                lastRawX = ev.rawX
+                lastRawY = ev.rawY
                 downX = ev.x
                 downY = ev.y
                 postDelayed(trigger, ViewConfiguration.getLongPressTimeout().toLong())
@@ -58,6 +71,26 @@ class LongPressWidgetView(context: Context) : AppWidgetHostView(context) {
     // Reached when no child of the widget wants the touch (or after we intercepted it).
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked != MotionEvent.ACTION_DOWN) track(ev)
+        if (longPressed) {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragging && hypot(ev.x - downX, ev.y - downY) > slop) {
+                        dragging = true
+                        onDragStart?.invoke()
+                    }
+                    if (dragging) onDrag?.invoke(ev.rawX - lastRawX, ev.rawY - lastRawY)
+                    lastRawX = ev.rawX
+                    lastRawY = ev.rawY
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (dragging) {
+                    dragging = false
+                    onDragEnd?.invoke()
+                }
+            }
+        } else {
+            lastRawX = ev.rawX
+            lastRawY = ev.rawY
+        }
         return true
     }
 }
