@@ -1,66 +1,103 @@
-# Bear Bones icon pack: ChatGPT prompt
+# Bear Bones icon pack: ChatGPT prompts
 
-Paste everything inside the box below into ChatGPT (a model that can run Python). It draws the icons with
-code, so they come out consistent and named exactly as the app expects. Then import them:
+No coding needed on your end. Paste the style message into ChatGPT first, then each sheet message one at a
+time. You'll get 4 images with 8 icons each. Save them as `sheet1.png` … `sheet4.png` and send them over;
+importing them is one command:
 
 ```bash
-python3 tools/iconpack/import.py ~/Downloads/bear-bones-icons.zip
+python3 tools/iconpack/import.py sheet1.png sheet2.png sheet3.png sheet4.png
 ```
 
-Rebuild the app. It's an easter egg: tap the date under the clock five times quickly to turn bear icons on or off.
+It finds the round icons on each sheet by shape (they don't need to line up perfectly), cuts them out with
+transparent corners, and wires them to the right apps. If a sheet comes back with the wrong number of icons,
+it says which one to redo.
 
----
+The icons are an easter egg in the app: tap the date under the clock five times quickly to turn bear
+icons on or off.
+
+## 1. Style (send first)
 
 ```text
-Make an Android icon pack for a minimalist launcher called "Bear Bones". Use Python (Pillow, or
-cairosvg/svgwrite rendered to PNG) to DRAW every icon with code so the set is perfectly consistent. Do not
-use an image model and do not copy any company's logo: each icon is a simple, generic symbol.
+I'm making a matching icon set for a minimalist Android launcher called "Bear Bones". I'll ask for
+4 sheets of 8 icons. Every sheet must follow these rules exactly:
 
-Style, identical for every icon:
-- Canvas 432x432 px, transparent outside a filled circle of diameter 432 in espresso brown #2A1F17.
-- One symbol per icon, drawn in bone white #EDE3CF, centered, fitting inside a 200x200 px box.
-- Line-art: strokes 22 px wide, round caps and round joins; at most one small solid fill for emphasis
-  (for example a dot or a lens). No gradients, shadows, text or extra decoration (the "translate" icon may
-  use a single letter A).
-- Friendly, slightly rounded geometry, the "bare bones" look: as few lines as it takes to read clearly
-  at 48 px. Optional: give each symbol one tiny bear-ear bump only if it still reads at small size.
-- Export PNG, then downscale with high-quality resampling to 192x192 px.
+Layout
+- One image, landscape, 4 icons across and 2 rows down, evenly spaced, with clear empty space between
+  icons so none of them touch.
+- Plain, flat, pure white background. No text, labels, numbers, borders, shadows or frames anywhere.
 
-Make exactly these files (names must match):
-- `bb_phone.png`: telephone handset
-- `bb_messages.png`: speech bubble
-- `bb_camera.png`: camera body with round lens
-- `bb_browser.png`: globe with meridian lines
-- `bb_mail.png`: envelope
-- `bb_maps.png`: folded map with a location pin
-- `bb_photos.png`: landscape picture (mountain and sun in a frame)
-- `bb_settings.png`: gear / cog
-- `bb_clock.png`: round clock face with two hands
-- `bb_calendar.png`: calendar page with two rings on top
-- `bb_contacts.png`: person bust (head and shoulders)
-- `bb_files.png`: folder
-- `bb_store.png`: shopping bag with a play triangle
-- `bb_music.png`: eighth note (musical note)
-- `bb_video.png`: play triangle inside a rounded screen
-- `bb_cloud.png`: cloud
-- `bb_notes.png`: notepad with lines
-- `bb_calculator.png`: calculator with plus/minus keys
-- `bb_weather.png`: sun partly behind a cloud
-- `bb_wallet.png`: wallet
-- `bb_translate.png`: two speech bubbles, one with the letter A
-- `bb_recorder.png`: microphone
-- `bb_assistant.png`: four-point sparkle star
-- `bb_search.png`: magnifying glass
-- `bb_chat.png`: two overlapping speech bubbles
-- `bb_videocall.png`: video camera
-- `bb_shield.png`: shield
-- `bb_locate.png`: location pin with a small circle (find my device)
-- `bb_shopping.png`: shopping cart
-- `bb_games.png`: game controller
-- `bb_code.png`: angle brackets </>
-- `bb_forum.png`: speech bubble with three dots
+Each icon
+- A perfect filled circle in dark espresso brown (#2A1F17), all circles the same size.
+- Inside it, one simple symbol in bone white (#EDE3CF), centered and filling about half the circle.
+- Bold, clean line art with rounded ends, like a minimal outline icon set. Flat colors only: no
+  gradients, glow, texture, 3D or shading.
+- Generic symbols only. Do not draw any company's logo or brand mark.
+- Friendly and slightly rounded, "bare bones": as few lines as needed to read at a small size.
 
-When done: show a contact sheet of all icons in a 6-column grid on a mid-grey background so I can check
-them, then give me a single zip named bear-bones-icons.zip containing only the PNG files listed above.
-If any icon is unclear at small size, redraw it simpler before zipping.
+Reply "ready" and wait for the first sheet's list.
 ```
+
+## 2. Sheets (send one at a time, after it replies)
+
+### Sheet 1 of 4
+
+```text
+Bear Bones icon sheet 1. Same style as before. Draw these 8 icons, in this exact order, left to right,
+top row first:
+1. telephone handset
+2. speech bubble
+3. camera body with round lens
+4. globe with meridian lines
+5. envelope
+6. folded map with a location pin
+7. landscape picture (mountain and sun in a frame)
+8. gear / cog
+```
+
+### Sheet 2 of 4
+
+```text
+Bear Bones icon sheet 2. Same style as before. Draw these 8 icons, in this exact order, left to right,
+top row first:
+1. round clock face with two hands
+2. calendar page with two rings on top
+3. person bust (head and shoulders)
+4. folder
+5. shopping bag with a play triangle
+6. eighth note (musical note)
+7. play triangle inside a rounded screen
+8. cloud
+```
+
+### Sheet 3 of 4
+
+```text
+Bear Bones icon sheet 3. Same style as before. Draw these 8 icons, in this exact order, left to right,
+top row first:
+1. notepad with lines
+2. calculator with plus/minus keys
+3. sun partly behind a cloud
+4. wallet
+5. two speech bubbles, one with the letter A
+6. microphone
+7. four-point sparkle star
+8. magnifying glass
+```
+
+### Sheet 4 of 4
+
+```text
+Bear Bones icon sheet 4. Same style as before. Draw these 8 icons, in this exact order, left to right,
+top row first:
+1. two overlapping speech bubbles
+2. video camera
+3. shield
+4. location pin with a small circle (find my device)
+5. shopping cart
+6. game controller
+7. angle brackets </>
+8. speech bubble with three dots
+```
+
+If an icon comes out wrong, reply with: "Redo sheet N, same layout and order, but make icon K a simpler
+<description>."
