@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single-colour silhouette for Android 13+ themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:fillType="nonZero"
+        android:pathData="M30.5,41 a8.5,8.5 0 1,1 17.0,0 a8.5,8.5 0 1,1 -17.0,0 z M60.5,41 a8.5,8.5 0 1,1 17.0,0 a8.5,8.5 0 1,1 -17.0,0 z M33,58 a21,19 0 1,1 42,0 a21,19 0 1,1 -42,0 z M35,41 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 z M65,41 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 z M43.4,55 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 z M59.4,55 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 z M50.6,63.5 a3.4,2.4 0 1,0 6.8,0 a3.4,2.4 0 1,0 -6.8,0 z" />
+</vector>

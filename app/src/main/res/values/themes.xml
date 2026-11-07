@@ -1,0 +1,12 @@
+<resources>
+    <!-- Wallpaper theme: the system draws the user's wallpaper behind our transparent window. -->
+    <style name="Theme.ArcLauncher" parent="android:Theme.DeviceDefault.Wallpaper.NoTitleBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>
