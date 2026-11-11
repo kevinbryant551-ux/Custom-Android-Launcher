@@ -68,5 +68,9 @@ Dragging home items across pages (drawer drags can flip pages; home items use Mo
 
 The app icon is a vector bear head in bone white on espresso brown (`res/drawable/ic_launcher_*`), with a monochrome layer for Android 13+ themed icons.
 
-The built-in **Bear Bones** icon pack is an easter egg: tap the date under the clock five times quickly to switch to it (again to switch back); it isn't listed under Icon pack. It's generic line glyphs (no brand logos) mapped to common apps in `tools/iconpack/glyphs.txt`. Apps not listed fall back to a glyph for their Android app category (games, music, video and so on). To make or replace the icons, use the prompt in `tools/iconpack/CHATGPT_PROMPT.md`, then run `python3 tools/iconpack/import.py <zip>` and rebuild.
+The built-in **Bear Bones** icon pack is an easter egg: tap the date under the clock five times quickly to switch to it (again to switch back); it isn't listed under Icon pack. It's 32 bone-white glyphs on espresso-brown discs, each with a little dog bone worked in (a bone handset for Phone, crossed bones on a treasure map for Maps, a gear made of three bones for Settings), and no brand logos. They're vector drawables (`res/drawable/bb_*.xml`), so they stay sharp at any size.
+
+![The 32 Bear Bones icons](tools/iconpack/preview.png)
+
+Which apps get which glyph is listed in `tools/iconpack/glyphs.txt`; an entry can name one launcher activity or a whole app (`package/*`). Apps not listed fall back to a glyph for their Android app category (games, music, video and so on), and anything else keeps its own icon. The icons are drawn by `tools/iconpack/make_icons.py` (Python standard library only): edit a glyph or the app list, run `python3 tools/iconpack/make_icons.py`, and rebuild.
 
