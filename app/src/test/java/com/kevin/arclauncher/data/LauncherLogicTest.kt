@@ -194,6 +194,16 @@ class LauncherLogicTest {
         assertEquals("com.foo/com.foo.Main", IconPack.parseComponent("ComponentInfo{com.foo/com.foo.Main}"))
         assertEquals("com.foo/com.foo.Main", IconPack.parseComponent("ComponentInfo{com.foo/.Main}"))
         assertEquals(null, IconPack.parseComponent(":LAUNCHER_ACTION_APP_DRAWER"))
+        assertEquals("com.foo/*", IconPack.parseComponent("ComponentInfo{com.foo/*}"))
+    }
+
+    @Test
+    fun iconPackPrefersExactActivityOverWholePackage() {
+        val map = mapOf("com.foo/com.foo.Main" to "bb_phone", "com.foo/*" to "bb_chat", "com.bar/*" to "bb_mail")
+        assertEquals("bb_phone", IconPack.drawableFor(map, "com.foo", "com.foo.Main"))
+        assertEquals("bb_chat", IconPack.drawableFor(map, "com.foo", "com.foo.Other"))
+        assertEquals("bb_mail", IconPack.drawableFor(map, "com.bar", "com.bar.Anything"))
+        assertEquals(null, IconPack.drawableFor(map, "com.baz", "com.baz.Main"))
     }
 }
 

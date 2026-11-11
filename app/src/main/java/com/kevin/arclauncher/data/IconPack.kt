@@ -24,7 +24,8 @@ class IconPack private constructor(
      * [category] (ApplicationInfo.CATEGORY_*) when the pack has one (the built-in pack does).
      */
     fun iconFor(component: ComponentName, category: Int, densityDpi: Int): Drawable? {
-        val name = drawableByComponent[component.flattenToString()] ?: categoryGlyph(category) ?: return null
+        val name = drawableFor(drawableByComponent, component.packageName, component.className)
+            ?: categoryGlyph(category) ?: return null
         val id = res.getIdentifier(name, "drawable", packageName)
         if (id == 0) return null
         return runCatching { res.getDrawableForDensity(id, densityDpi, null) }.getOrNull()
@@ -44,7 +45,7 @@ class IconPack private constructor(
                 .sortedBy { it.second.lowercase() }
         }
 
-        /** True once tools/iconpack/import.py has added icons to this app. */
+        /** True when the built-in pack (drawn by tools/iconpack/make_icons.py) is in this build. */
         fun hasBuiltIn(context: Context): Boolean =
             context.resources.getIdentifier("appfilter", "xml", context.packageName) != 0
 
@@ -59,6 +60,13 @@ class IconPack private constructor(
             ApplicationInfo.CATEGORY_PRODUCTIVITY -> "bb_notes"
             else -> null
         }
+
+        /**
+         * The drawable an appfilter map gives an activity: an exact "package/Class" entry first, then a
+         * "package/\*" entry, which the built-in pack uses for apps whose launcher activity name isn't known.
+         */
+        fun drawableFor(map: Map<String, String>, packageName: String, className: String): String? =
+            map["$packageName/$className"] ?: map["$packageName/*"]
 
         /** Reads a pack's appfilter.xml (from res/xml or assets). Slow: call off the main thread. */
         fun load(context: Context, packageName: String): IconPack? = runCatching {
