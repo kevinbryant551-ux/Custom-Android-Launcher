@@ -220,7 +220,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setIconPack(packageName: String?) = edit { it.copy(iconPack = packageName) }
 
     /**
-     * Easter egg: switches to the hidden built-in bear icons, or back to the apps' own icons.
+     * Shortcut (five taps on the date): switches to the built-in Bear Bones icons, or back to the apps' own icons.
      * Returns the message to show.
      */
     fun toggleBearIcons(): String {

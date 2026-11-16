@@ -35,10 +35,11 @@ class IconPack private constructor(
         // Intent actions icon packs register so launchers can find them.
         private val PACK_ACTIONS = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.gau.go.launcherex.theme")
 
-        /** Installed icon packs as (package, label). The built-in bear pack is an easter egg and isn't listed. */
+        /** Icon packs to choose from as (package, label): the built-in Bear Bones pack first, then installed ones. */
         fun installed(context: Context): List<Pair<String, String>> {
             val pm = context.packageManager
-            return PACK_ACTIONS.flatMap { action -> pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA) }
+            val builtIn = if (hasBuiltIn(context)) listOf(context.packageName to "Bear Bones (built in)") else emptyList()
+            return builtIn + PACK_ACTIONS.flatMap { action -> pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA) }
                 .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
                 .distinctBy { it.first }
                 .filter { it.first != context.packageName }

@@ -68,7 +68,7 @@ Dragging home items across pages (drawer drags can flip pages; home items use Mo
 
 The app icon is a vector bear head in bone white on espresso brown (`res/drawable/ic_launcher_*`), with a monochrome layer for Android 13+ themed icons.
 
-The built-in **Bear Bones** icon pack is an easter egg: tap the date under the clock five times quickly to switch to it (again to switch back); it isn't listed under Icon pack. It's 32 bone-white glyphs on espresso-brown discs, each with a little dog bone worked in (a bone handset for Phone, crossed bones on a treasure map for Maps, a gear made of three bones for Settings), and no brand logos. They're vector drawables (`res/drawable/bb_*.xml`), so they stay sharp at any size.
+The built-in **Bear Bones** icon pack is listed first under Icon pack (long-press empty home space), and there's a shortcut: tap the date under the clock five times quickly to switch to it (again to switch back). Apps keep their standard icons until you pick it. It's 32 bone-white glyphs on espresso-brown discs, each with a little dog bone worked in (a bone handset for Phone, crossed bones on a treasure map for Maps, a gear made of three bones for Settings), and no brand logos. They're vector drawables (`res/drawable/bb_*.xml`), so they stay sharp at any size.
 
 ![The 32 Bear Bones icons](tools/iconpack/preview.png)
 
