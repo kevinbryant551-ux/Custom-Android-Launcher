@@ -425,8 +425,8 @@ private fun IconPackDialog(current: String?, onDismiss: () -> Unit, onPick: (Str
         title = { Text("Icon pack") },
         text = {
             Column {
-                if (packs.isEmpty()) {
-                    Text("No icon packs installed. Get one from the Play Store (search \"icon pack\"), then pick it here.")
+                if (packs.none { it.first != context.packageName }) {
+                    Text("Want more? Get an icon pack from the Play Store (search \"icon pack\"), then pick it here.")
                 }
                 TextButton(onClick = { onPick(null) }) { Text(if (current == null) "✓ App icons (default)" else "App icons (default)") }
                 packs.forEach { (pkg, label) ->
